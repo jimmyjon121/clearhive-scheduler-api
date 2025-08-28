@@ -1,20 +1,30 @@
 {
   "name": "clearhive-scheduler-api",
   "version": "1.0.0",
-  "description": "Scheduling API for ClearHive platform",
-  "main": "index.js",
+  "description": "Therapeutic Outing Scheduling API for Family First Program",
+  "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "setup": "node src/cli/setup.js",
+    "init-db": "psql -U postgres -f src/models/schema.sql",
+    "start:pm2": "pm2 start deployment/pm2-config.json",
+    "stop:pm2": "pm2 stop scheduler-api",
+    "restart:pm2": "pm2 restart scheduler-api",
+    "logs": "pm2 logs scheduler-api",
+    "docker:build": "docker build -t scheduler-api .",
+    "docker:run": "docker-compose up -d",
+    "docker:stop": "docker-compose down",
+    "docker:logs": "docker-compose logs -f api"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jimmyjon121/clearhive-scheduler-api.git"
   },
-  "keywords": [],
+  "keywords": ["scheduling", "therapeutic", "outings", "api"],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/jimmyjon121/clearhive-scheduler-api/issues"
@@ -25,10 +35,20 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
+    "google-auth-library": "^9.14.2",
+    "googleapis": "^159.0.0",
+    "handlebars": "^4.7.8",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.16.3"
+    "nodemailer": "^6.9.15",
+    "pg": "^8.16.3",
+    "puppeteer": "^23.10.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
   }
 }
