@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family First Scheduler - Quick Start</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 { color: #2c3e50; margin-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 30px; }
+        .subtitle { color: #7f8c8d; margin-bottom: 30px; }
+        .config {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #3498db;
+        }
+        .config code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+        button:hover { background: #2980b9; }
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        .success { color: #27ae60; }
+        .error { color: #e74c3c; }
+        .warning { color: #f39c12; }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            display: none;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .schedule-preview {
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th { background: #f8f9fa; font-weight: 600; }
+        .loading { color: #3498db; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🏠 Family First Scheduler</h1>
+        <p class="subtitle">Quick Setup & Testing Interface</p>
+        
+        <div class="config">
+            <h3>Step 1: Configure Your API URL</h3>
+            <p>After deploying to Railway, enter your API URL below:</p>
+            <input 
+                type="text" 
+                id="apiUrl" 
+                placeholder="https://your-app.up.railway.app"
+                value="http://localhost:3000"
+            />
+            <button onclick="testConnection()">Test Connection</button>
+            <button onclick="saveConfig()">Save Configuration</button>
+            <div id="connectionStatus" class="status"></div>
+        </div>
+
+        <div id="mainInterface" style="display: none;">
+            <h2>🚀 Quick Actions</h2>
+            
+            <h3>Initialize Database</h3>
+            <p>First time setup? Initialize your database with sample data:</p>
+            <button onclick="initializeDatabase()">Initialize Database</button>
+            <div id="initStatus" class="status"></div>
+            
+            <h3>Generate Schedules</h3>
+            <p>Generate a year of schedules starting from next Tuesday:</p>
+            <button onclick="generateSchedules()">Generate Year Schedule</button>
+            <div id="generateStatus" class="status"></div>
+            
+            <h3>View Schedule</h3>
+            <p>View and download next Tuesday's schedule:</p>
+            <button onclick="viewSchedule()">View Next Tuesday</button>
+            <button onclick="downloadPDF()">Download PDF</button>
+            <div id="schedulePreview" class="schedule-preview"></div>
+        </div>
+    </div>
+
+    <script>
+        // Load saved configuration
+        let API_BASE = localStorage.getItem('schedulerApiUrl') || 'http://localhost:3000';
+        document.getElementById('apiUrl').value = API_BASE;
+
+        function showStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${type}`;
+            element.style.display = 'block';
+        }
+
+        function saveConfig() {
+            API_BASE = document.getElementById('apiUrl').value.replace(/\/$/, '');
+            localStorage.setItem('schedulerApiUrl', API_BASE);
+            showStatus('connectionStatus', 'Configuration saved!', 'success');
+            testConnection();
+        }
+
+        async function testConnection() {
+            showStatus('connectionStatus', 'Testing connection...', 'success');
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/health`);
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showStatus('connectionStatus', '✅ Connected successfully!', 'success');
+                    document.getElementById('mainInterface').style.display = 'block';
+                } else {
+                    throw new Error('Invalid response');
+                }
+            } catch (error) {
+                showStatus('connectionStatus', `❌ Connection failed: ${error.message}`, 'error');
+                document.getElementById('mainInterface').style.display = 'none';
+            }
+        }
+
+        async function initializeDatabase() {
+            showStatus('initStatus', 'Initializing database...', 'success');
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/setup/initialize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    showStatus('initStatus', '✅ Database initialized successfully!', 'success');
+                } else {
+                    const error = await response.text();
+                    throw new Error(error);
+                }
+            } catch (error) {
+                showStatus('initStatus', `❌ Initialization failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function generateSchedules() {
+            showStatus('generateStatus', 'Generating schedules...', 'success');
+            
+            // Calculate next Tuesday
+            const today = new Date();
+            const daysUntilTuesday = (2 - today.getDay() + 7) % 7 || 7;
+            const nextTuesday = new Date(today);
+            nextTuesday.setDate(today.getDate() + daysUntilTuesday);
+            const startDate = nextTuesday.toISOString().split('T')[0];
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/advanced-schedules/generate-year`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        facility_id: 1,
+                        start_date: startDate,
+                        weeks: 52
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showStatus('generateStatus', `✅ Generated ${data.weeks_generated} weeks of schedules!`, 'success');
+                } else {
+                    throw new Error('Failed to generate schedules');
+                }
+            } catch (error) {
+                showStatus('generateStatus', `❌ Generation failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function viewSchedule() {
+            // Calculate next Tuesday
+            const today = new Date();
+            const daysUntilTuesday = (2 - today.getDay() + 7) % 7 || 7;
+            const nextTuesday = new Date(today);
+            nextTuesday.setDate(today.getDate() + daysUntilTuesday);
+            const dateStr = nextTuesday.toISOString().split('T')[0];
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/advanced-schedules/${dateStr}/details`);
+                const data = await response.json();
+                
+                let html = `<h3>Schedule for ${nextTuesday.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3>`;
+                
+                if (data.am_assignments?.length > 0 || data.pm_assignments?.length > 0) {
+                    html += '<table><thead><tr><th>Time</th><th>Program</th><th>Vendor</th><th>Address</th></tr></thead><tbody>';
+                    
+                    // AM assignments
+                    data.am_assignments?.forEach(assignment => {
+                        html += `<tr>
+                            <td>AM</td>
+                            <td style="color: ${assignment.program_color}">${assignment.program_name}</td>
+                            <td>${assignment.vendor_name}</td>
+                            <td>${assignment.vendor_address || 'N/A'}</td>
+                        </tr>`;
+                    });
+                    
+                    // PM assignments
+                    data.pm_assignments?.forEach(assignment => {
+                        html += `<tr>
+                            <td>PM</td>
+                            <td style="color: ${assignment.program_color}">${assignment.program_name}</td>
+                            <td>${assignment.vendor_name}</td>
+                            <td>${assignment.vendor_address || 'N/A'}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                } else {
+                    html += '<p class="warning">No schedules found. Try generating schedules first.</p>';
+                }
+                
+                document.getElementById('schedulePreview').innerHTML = html;
+            } catch (error) {
+                document.getElementById('schedulePreview').innerHTML = `<p class="error">Error loading schedule: ${error.message}</p>`;
+            }
+        }
+
+        function downloadPDF() {
+            // Calculate next Tuesday
+            const today = new Date();
+            const daysUntilTuesday = (2 - today.getDay() + 7) % 7 || 7;
+            const nextTuesday = new Date(today);
+            nextTuesday.setDate(today.getDate() + daysUntilTuesday);
+            const dateStr = nextTuesday.toISOString().split('T')[0];
+            
+            window.open(`${API_BASE}/api/v1/advanced-schedules/${dateStr}/pdf`, '_blank');
+        }
+
+        // Test connection on load if we have a saved URL
+        if (API_BASE && API_BASE !== 'http://localhost:3000') {
+            testConnection();
+        }
+    </script>
+</body>
+</html>

@@ -7,17 +7,46 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const vendorRoutes = require('./routes/vendors');
-const scheduleRoutes = require('./routes/schedules');
-const advancedScheduleRoutes = require('./routes/advancedSchedules');
-const programRoutes = require('./routes/programs');
-const setupRoutes = require('./routes/setup');
+// Load routes with error handling
+try {
+  const vendorRoutes = require('./routes/vendors');
+  app.use('/api/v1/vendors', vendorRoutes);
+  console.log('✅ Vendor routes loaded');
+} catch (error) {
+  console.error('❌ Error loading vendor routes:', error.message);
+}
 
-app.use('/api/v1/vendors', vendorRoutes);
-app.use('/api/v1/schedules', scheduleRoutes);
-app.use('/api/v1/advanced-schedules', advancedScheduleRoutes);
-app.use('/api/v1/programs', programRoutes);
-app.use('/api/v1/setup', setupRoutes);
+try {
+  const scheduleRoutes = require('./routes/schedules');
+  app.use('/api/v1/schedules', scheduleRoutes);
+  console.log('✅ Schedule routes loaded');
+} catch (error) {
+  console.error('❌ Error loading schedule routes:', error.message);
+}
+
+try {
+  const advancedScheduleRoutes = require('./routes/advancedSchedules');
+  app.use('/api/v1/advanced-schedules', advancedScheduleRoutes);
+  console.log('✅ Advanced schedule routes loaded');
+} catch (error) {
+  console.error('❌ Error loading advanced schedule routes:', error.message);
+}
+
+try {
+  const programRoutes = require('./routes/programs');
+  app.use('/api/v1/programs', programRoutes);
+  console.log('✅ Program routes loaded');
+} catch (error) {
+  console.error('❌ Error loading program routes:', error.message);
+}
+
+try {
+  const setupRoutes = require('./routes/setup');
+  app.use('/api/v1/setup', setupRoutes);
+  console.log('✅ Setup routes loaded');
+} catch (error) {
+  console.error('❌ Error loading setup routes:', error.message);
+}
 
 // Root endpoint
 app.get('/', (req, res) => {

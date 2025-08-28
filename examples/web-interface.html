@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Family First Therapeutic Outing Scheduler</title>
+    <title>Family First - Therapeutic Outing Scheduler</title>
     <style>
         * {
             margin: 0;
@@ -190,7 +190,17 @@
 </head>
 <body>
     <div class="container">
-        <h1>Family First Therapeutic Outing Scheduler</h1>
+        <header>
+            <h1>🏠 Family First</h1>
+            <p>Therapeutic Outing Scheduler</p>
+        </header>
+
+        <!-- API Configuration Alert -->
+        <div id="apiConfig" class="message warning" style="display: none;">
+            <strong>⚠️ Setup Required:</strong> 
+            <p>Please update the API_URL at the top of this file to your Railway URL.</p>
+            <p>Current URL: <code id="currentUrl"></code></p>
+        </div>
 
         <div id="alerts"></div>
 
@@ -236,7 +246,20 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:3000/api/v1';
+        // ⚡ CHANGE THIS TO YOUR RAILWAY URL AFTER DEPLOYMENT ⚡
+        const API_URL = 'http://localhost:3000/api/v1';
+        // Example: const API_URL = 'https://family-first-scheduler-api.up.railway.app/api/v1';
+        
+        // Show configuration alert if using localhost
+        window.addEventListener('DOMContentLoaded', () => {
+            if (API_URL.includes('localhost')) {
+                document.getElementById('apiConfig').style.display = 'block';
+                document.getElementById('currentUrl').textContent = API_URL;
+            }
+            checkApiHealth();
+        });
+
+        const API_BASE = API_URL;
         let currentDate = getNextTuesday();
 
         // Initialize
@@ -489,11 +512,3 @@
                     showAlert('Error sending notifications: ' + data.error, 'error');
                 }
             } catch (error) {
-                showAlert('Error sending notifications: ' + error.message, 'error');
-            } finally {
-                hideLoading();
-            }
-        }
-    </script>
-</body>
-</html>
