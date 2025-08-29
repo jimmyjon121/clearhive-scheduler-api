@@ -48,6 +48,14 @@ try {
   console.error('❌ Error loading setup routes:', error.message);
 }
 
+try {
+  const emailRoutes = require('./routes/emails');
+  app.use('/api/v1/emails', emailRoutes);
+  console.log('✅ Email routes loaded');
+} catch (error) {
+  console.error('❌ Error loading email routes:', error.message);
+}
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({

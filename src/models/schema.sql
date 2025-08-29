@@ -41,6 +41,7 @@ CREATE TABLE programs (
   priority INTEGER DEFAULT 1,
   color VARCHAR(7), -- Hex color for PDF rows
   program_coordinator_email VARCHAR(255),
+  additional_emails TEXT, -- Comma-separated list of additional emails
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -110,3 +111,44 @@ INSERT INTO outing_expectations (facility_id, title, content) VALUES
 • Be mindful of any wandering behavior—clients should not be looking for cigarettes, vapes, or contraband. Redirect and remain vigilant.
 
 ✅ Incident Protocol: If any issues arise, contact PC/APC and transport clients back to the appropriate property as needed.');
+
+-- Email archives table
+CREATE TABLE email_archives (
+  id SERIAL PRIMARY KEY,
+  facility_id INTEGER REFERENCES facilities(id),
+  house_name VARCHAR(255) NOT NULL,
+  schedule_date DATE NOT NULL,
+  recipients JSONB NOT NULL, -- JSON array of email addresses
+  html_path TEXT NOT NULL, -- Path to archived HTML file
+  pdf_path TEXT, -- Path to archived PDF file
+  email_type VARCHAR(50) DEFAULT 'schedule_notification', -- 'schedule_notification', 'reminder', 'digest'
+  message_id VARCHAR(255), -- Email service message ID
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_email_archives_house_date ON email_archives(house_name, schedule_date);
+CREATE INDEX idx_email_archives_created_at ON email_archives(created_at);
+
+-- Email settings table
+CREATE TABLE email_settings (
+  id SERIAL PRIMARY KEY,
+  facility_id INTEGER REFERENCES facilities(id),
+  smtp_host VARCHAR(255) DEFAULT 'smtp.gmail.com',
+  smtp_port INTEGER DEFAULT 587,
+  smtp_secure BOOLEAN DEFAULT false,
+  smtp_user VARCHAR(255),
+  smtp_pass VARCHAR(255),
+  from_email VARCHAR(255) DEFAULT 'noreply@familyfirst.org',
+  admin_email VARCHAR(255),
+  daily_reminder_time TIME DEFAULT '07:00:00',
+  weekly_digest_day INTEGER DEFAULT 1, -- 1 = Monday
+  weekly_digest_time TIME DEFAULT '08:00:00',
+  auto_reminders_enabled BOOLEAN DEFAULT true,
+  color_coding_enabled BOOLEAN DEFAULT true,
+  archive_enabled BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert default email settings
+INSERT INTO email_settings (facility_id) VALUES (1);
