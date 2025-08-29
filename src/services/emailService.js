@@ -24,99 +24,94 @@ class EmailService {
     this.reminderJobs = new Map();
   }
 
-  initialize(config) {
-    if (!config) {
-      console.warn('Email configuration not provided. Email service disabled.');
-      return;
+  initialize({ host, port, secure, user, pass }) {
+    try {
+      this.transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: Boolean(secure),
+        auth: user && pass ? { user, pass } : undefined
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error initializing email transporter:', error);
+      this.transporter = null;
+      return { success: false, error: error.message };
     }
-
-    this.transporter = nodemailer.createTransport({
-      host: config.host || 'smtp.gmail.com',
-      port: config.port || 587,
-      secure: config.secure || false,
-      auth: {
-        user: config.user,
-        pass: config.pass
-      }
-    });
   }
 
-  async sendScheduleNotification(programData, scheduleData, expectations, facilitySettings, includeColorCoding = true) {
+  async sendScheduleNotification(program, scheduleData, expectations = [], facilitySettings = {}, includeColorCoding = true) {
     if (!this.transporter) {
       console.warn('Email service not configured');
       return { success: false, error: 'Email service not configured' };
     }
 
+    const houseName = program.house_name;
+    const assignment = scheduleData.assignments?.[houseName];
+    if (!assignment) {
+      return { success: false, error: `No assignment found for ${houseName}` };
+    }
+
+    const houseColor = this.getHouseColor(houseName);
+    const emailHTML = await this.generateColorCodedEmailHTML(
+      houseName,
+      assignment,
+      expectations,
+      facilitySettings,
+      scheduleData,
+      houseColor,
+      includeColorCoding
+    );
+
+    // Prepare expectations for PDF template (expects array of {title, content})
+    const expectationsForPdf = Array.isArray(expectations) && expectations.length
+      ? [{ title: 'Important Reminders', content: expectations.map(e => `<p>${e}</p>`).join('') }]
+      : [];
+
+    const pdfBuffer = await pdfGenerator.generateSchedulePDF({
+      ...scheduleData,
+      expectations: expectationsForPdf
+    }, facilitySettings);
+
+    const recipients = [];
+    if (program.program_coordinator_email) recipients.push(program.program_coordinator_email);
+    if (program.additional_emails) recipients.push(...program.additional_emails.split(',').map(e => e.trim()).filter(Boolean));
+
+    if (!recipients.length) {
+      return { success: false, error: 'No recipients found for program' };
+    }
+
+    const mailOptions = {
+      from: facilitySettings.from_email || facilitySettings.email || 'noreply@familyfirst.org',
+      to: recipients.join(', '),
+      subject: `Therapeutic Outing Schedule - ${houseName} - ${new Date(scheduleData.schedule_date).toLocaleDateString()}`,
+      html: emailHTML,
+      attachments: [
+        {
+          filename: `outing-schedule-${houseName}-${scheduleData.schedule_date}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf'
+        }
+      ]
+    };
+
     try {
-      const { house_name, program_coordinator_email, additional_emails } = programData;
-      const assignment = scheduleData.assignments[house_name];
+      const result = await this.transporter.sendMail(mailOptions);
 
-      if (!assignment || !program_coordinator_email) {
-        throw new Error('Missing required data for email notification');
-      }
-
-      // Get house color
-      const houseColor = this.getHouseColor(house_name);
-
-      // Generate color-coded email HTML
-      const emailHTML = await this.generateColorCodedEmailHTML(
-        house_name,
-        assignment,
-        expectations,
-        facilitySettings,
-        scheduleData,
-        houseColor,
-        includeColorCoding
-      );
-
-      // Generate color-coded PDF attachment
-      const pdfBuffer = await pdfGenerator.generateColorCodedSchedulePDF(
-        scheduleData,
-        facilitySettings,
-        this.colorScheme
-      );
-
-      // Archive the email content
+      // Archive email
       await this.archiveEmail({
-        house_name,
+        facility_id: scheduleData.facility_id || program.facility_id || 1,
+        house_name: houseName,
         schedule_date: scheduleData.schedule_date,
         email_content: emailHTML,
         pdf_content: pdfBuffer,
-        recipients: [program_coordinator_email, ...(additional_emails || [])]
+        recipients
       });
 
-      const recipients = [program_coordinator_email];
-      if (additional_emails) {
-        recipients.push(...additional_emails.split(',').map(email => email.trim()));
-      }
-
-      const mailOptions = {
-        from: facilitySettings.email || 'noreply@familyfirst.org',
-        to: recipients.join(', '),
-        subject: `Therapeutic Outing Schedule - ${house_name} - ${new Date(scheduleData.schedule_date).toLocaleDateString()}`,
-        html: emailHTML,
-        attachments: [
-          {
-            filename: `outing-schedule-${house_name}-${scheduleData.schedule_date}.pdf`,
-            content: pdfBuffer,
-            contentType: 'application/pdf'
-          }
-        ]
-      };
-
-      const result = await this.transporter.sendMail(mailOptions);
-      
-      return {
-        success: true,
-        messageId: result.messageId,
-        archived: true
-      };
+      return { success: true, messageId: result.messageId, archived: true };
     } catch (error) {
       console.error('Error sending email:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
@@ -394,20 +389,20 @@ class EmailService {
       }
 
       // Save metadata to database
-      await db.query(`
-        INSERT INTO email_archives (
-          house_name, schedule_date, recipients, html_path, pdf_path, 
-          created_at, email_type
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [
-        emailData.house_name,
-        emailData.schedule_date,
-        JSON.stringify(emailData.recipients),
-        `${filename}.html`,
-        emailData.pdf_content ? `${filename}.pdf` : null,
-        new Date().toISOString(),
-        'schedule_notification'
-      ]);
+      await db.query(
+        `INSERT INTO email_archives (
+           facility_id, house_name, schedule_date, recipients, html_path, pdf_path, email_type
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          emailData.facility_id || 1,
+          emailData.house_name,
+          emailData.schedule_date,
+          JSON.stringify(emailData.recipients),
+          `${filename}.html`,
+          emailData.pdf_content ? `${filename}.pdf` : null,
+          'schedule_notification'
+        ]
+      );
 
       console.log(`Email archived: ${filename}`);
       return { success: true, archive_id: filename };
@@ -452,25 +447,34 @@ class EmailService {
       const today = new Date().toISOString().split('T')[0];
       
       // Get today's schedules
-      const schedules = await db.query(`
-        SELECT s.*, p.house_name, p.program_coordinator_email, p.additional_emails
-        FROM schedules s
-        JOIN programs p ON s.program_id = p.id
-        WHERE DATE(s.schedule_date) = ?
-      `, [today]);
+      const schedules = await db.query(
+        `SELECT * FROM schedules WHERE schedule_date = $1`,
+        [today]
+      );
 
-      for (const schedule of schedules) {
-        // Send reminder email
-        await this.sendScheduleReminder(schedule);
+      for (const schedule of schedules.rows) {
+        const assignments = schedule.assignments || {};
+        for (const [houseName, assignment] of Object.entries(assignments)) {
+          await this.sendScheduleReminder({
+            facility_id: schedule.facility_id,
+            house_name: houseName,
+            time: assignment.time
+          });
+        }
       }
     } catch (error) {
       console.error('Error sending daily reminders:', error);
     }
   }
 
+  // Placeholder: implement vendor confirmation reminders if needed
+  async sendVendorConfirmationReminders() {
+    // For now, just log. Later, lookup tomorrow's schedules and email vendors.
+    console.log('Vendor confirmation reminder job ran (stub).');
+  }
+
   async sendScheduleReminder(schedule) {
     const houseColor = this.getHouseColor(schedule.house_name);
-    
     const reminderHTML = `
       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 3px solid ${houseColor}; border-radius: 12px; overflow: hidden;">
         <div style="background: ${houseColor}; color: white; padding: 20px; text-align: center;">
@@ -491,10 +495,19 @@ class EmailService {
       </div>
     `;
 
-    const recipients = [schedule.program_coordinator_email];
-    if (schedule.additional_emails) {
-      recipients.push(...schedule.additional_emails.split(',').map(email => email.trim()));
+    // Build recipients from programs table matching the assigned program
+    const program = await db.query(
+      'SELECT * FROM programs WHERE house_name = $1 AND facility_id = $2',
+      [schedule.house_name || '', schedule.facility_id || 1]
+    );
+    const recipients = [];
+    if (program.rows.length) {
+      const p = program.rows[0];
+      if (p.program_coordinator_email) recipients.push(p.program_coordinator_email);
+      if (p.additional_emails) recipients.push(...p.additional_emails.split(',').map(e => e.trim()));
     }
+
+    if (!this.transporter || !recipients.length) return;
 
     const mailOptions = {
       from: 'noreply@familyfirst.org',
@@ -503,44 +516,34 @@ class EmailService {
       html: reminderHTML
     };
 
-    if (this.transporter) {
-      await this.transporter.sendMail(mailOptions);
-      console.log(`Reminder sent to ${schedule.house_name}`);
-    }
+    await this.transporter.sendMail(mailOptions);
+    console.log(`Reminder sent to ${schedule.house_name}`);
   }
 
   async getEmailArchives(filters = {}) {
     try {
-      let query = `
-        SELECT ea.*, COUNT(ea.id) as total_emails
-        FROM email_archives ea
-        WHERE 1=1
-      `;
+      let query = 'SELECT ea.* FROM email_archives ea WHERE 1=1';
       const params = [];
-
+      let idx = 1;
       if (filters.house_name) {
-        query += ' AND ea.house_name = ?';
+        query += ` AND ea.house_name = $${idx++}`;
         params.push(filters.house_name);
       }
-
       if (filters.date_from) {
-        query += ' AND DATE(ea.schedule_date) >= ?';
+        query += ` AND ea.schedule_date >= $${idx++}`;
         params.push(filters.date_from);
       }
-
       if (filters.date_to) {
-        query += ' AND DATE(ea.schedule_date) <= ?';
+        query += ` AND ea.schedule_date <= $${idx++}`;
         params.push(filters.date_to);
       }
-
-      query += ' GROUP BY ea.house_name, ea.schedule_date ORDER BY ea.created_at DESC';
-
+      query += ' ORDER BY ea.created_at DESC';
       if (filters.limit) {
-        query += ` LIMIT ${filters.limit}`;
+        query += ` LIMIT $${idx++}`;
+        params.push(filters.limit);
       }
-
       const archives = await db.query(query, params);
-      return { success: true, archives };
+      return { success: true, archives: archives.rows };
     } catch (error) {
       console.error('Error fetching email archives:', error);
       return { success: false, error: error.message };

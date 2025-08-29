@@ -286,11 +286,11 @@ class SchedulerApp {
                     <div class="stat-content">
                         <h3>Quick Actions</h3>
                         <div class="quick-actions">
-                            <button class="btn btn-sm btn-primary" onclick="app.showView('schedules')">
+                            <button class="btn btn-sm btn-primary" onclick="app.showTab('generate')">
                                 Generate Schedule
                             </button>
-                            <button class="btn btn-sm btn-secondary" onclick="app.showView('reports')">
-                                View Reports
+                            <button class="btn btn-sm btn-secondary" onclick="app.showTab('schedules')">
+                                View Schedules
                             </button>
                         </div>
                     </div>
@@ -624,7 +624,7 @@ class SchedulerApp {
         };
 
         try {
-            const response = await fetch(`${this.apiUrl}/api/schedules/generate`, {
+            const response = await fetch(`${this.apiUrl}/api/v1/schedules/generate`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -637,7 +637,7 @@ class SchedulerApp {
                 this.showNotification(`Generated ${result.schedules.length} schedules successfully!`, 'success');
                 this.closeModal();
                 await this.loadInitialData();
-                this.showView('schedules');
+                this.showTab('schedules');
             } else {
                 throw new Error('Failed to generate schedule');
             }
@@ -658,20 +658,6 @@ class SchedulerApp {
         document.getElementById('modalContainer').style.display = 'none';
     }
 
-    showNotification(message, type = 'info') {
-        const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.innerHTML = `
-            <span>${message}</span>
-            <button onclick="this.parentElement.remove()">×</button>
-        `;
-        
-        document.body.appendChild(notification);
-        
-        setTimeout(() => {
-            notification.remove();
-        }, 5000);
-    }
 
     async exportReport() {
         try {

@@ -8,6 +8,12 @@ const db = require('../utils/db');
 
 // Generate schedule for year
 router.post('/generate-year', advancedScheduleController.generateScheduleForYear);
+// Alias to generate a number of weeks starting from a given date
+router.post('/generate-week', (req, res) => {
+  // reuse year generator but with weeks param from body
+  req.body.weeks = req.body.weeks || 1;
+  return advancedScheduleController.generateScheduleForYear(req, res);
+});
 
 // Get schedule with full details
 router.get('/:date/details', advancedScheduleController.getScheduleWithDetails);
@@ -22,7 +28,7 @@ router.put('/:date/assignment', advancedScheduleController.updateAssignment);
 router.get('/:date/pdf', async (req, res) => {
   try {
     const { date } = req.params;
-    const facilityId = req.query.facility_id || 1;
+  const facilityId = req.query.facility_id || 1;
 
     // Get schedule with details
     const schedule = await db.query(
@@ -90,9 +96,27 @@ router.post('/:date/notify', async (req, res) => {
     const { programs: programsToNotify } = req.body;
     const facilityId = req.query.facility_id || 1;
 
-    // Get schedule details
-    const scheduleResponse = await fetch(`/api/v1/advanced-schedules/${date}/details?facility_id=${facilityId}`);
-    const scheduleData = await scheduleResponse.json();
+    // Get schedule
+    const scheduleRes = await db.query(
+      'SELECT * FROM schedules WHERE facility_id = $1 AND schedule_date = $2',
+      [facilityId, date]
+    );
+    if (scheduleRes.rows.length === 0) {
+      return res.status(404).json({ error: 'No schedule found for this date' });
+    }
+
+    const scheduleRow = scheduleRes.rows[0];
+
+    // Get programs and expectations
+    const programsRes = await db.query(
+      'SELECT * FROM programs WHERE facility_id = $1',
+      [facilityId]
+    );
+
+    const expectationsRes = await db.query(
+      'SELECT content FROM outing_expectations WHERE facility_id = $1 AND active = true',
+      [facilityId]
+    );
 
     // Get facility settings
     const facility = await db.query(
@@ -100,7 +124,7 @@ router.post('/:date/notify', async (req, res) => {
       [facilityId]
     );
 
-    const facilitySettings = facility.rows[0];
+  const facilitySettings = facility.rows[0];
 
     // Initialize email service if not already done
     if (process.env.EMAIL_CONFIG) {
@@ -108,25 +132,17 @@ router.post('/:date/notify', async (req, res) => {
     }
 
     // Send notifications
-    let results;
+    let programsList = programsRes.rows;
     if (programsToNotify && programsToNotify.length > 0) {
-      // Send to specific programs
-      const programsData = scheduleData.programs.filter(p => programsToNotify.includes(p.house_name));
-      results = await emailService.sendBulkScheduleNotifications(
-        scheduleData,
-        programsData,
-        scheduleData.expectations,
-        facilitySettings
-      );
-    } else {
-      // Send to all programs
-      results = await emailService.sendBulkScheduleNotifications(
-        scheduleData,
-        scheduleData.programs,
-        scheduleData.expectations,
-        facilitySettings
-      );
+      programsList = programsList.filter(p => programsToNotify.includes(p.house_name));
     }
+
+    const results = await emailService.sendBulkScheduleNotifications(
+      scheduleRow,
+      programsList,
+      expectationsRes.rows.map(e => e.content),
+      facilitySettings
+    );
 
     res.json({
       success: true,
@@ -163,12 +179,12 @@ router.post('/sync-sheets', async (req, res) => {
     // Get programs and vendors
     const programs = await db.query(
       'SELECT * FROM programs WHERE facility_id = $1',
-      [facilityId]
+      [facility_id]
     );
 
     const vendors = await db.query(
       'SELECT * FROM vendors WHERE facility_id = $1',
-      [facilityId]
+      [facility_id]
     );
 
     // Update Google Sheets

@@ -10,41 +10,41 @@ class EmailController {
 
       // Get schedule data
       const schedule = await db.query(
-        'SELECT * FROM schedules WHERE id = ?',
+        'SELECT * FROM schedules WHERE id = $1',
         [scheduleId]
       );
 
-      if (!schedule.length) {
+      if (!schedule.rows.length) {
         return res.status(404).json({ error: 'Schedule not found' });
       }
 
       // Get program data
       const program = await db.query(
-        'SELECT * FROM programs WHERE id = ?',
+        'SELECT * FROM programs WHERE id = $1',
         [programId]
       );
 
-      if (!program.length) {
+      if (!program.rows.length) {
         return res.status(404).json({ error: 'Program not found' });
       }
 
       // Get facility settings
       const facility = await db.query(
-        'SELECT * FROM facilities WHERE id = ?',
-        [program[0].facility_id]
+        'SELECT * FROM facilities WHERE id = $1',
+        [program.rows[0].facility_id]
       );
 
       // Get expectations
       const expectations = await db.query(
-        'SELECT content FROM outing_expectations WHERE facility_id = ? AND active = true',
-        [program[0].facility_id]
+        'SELECT content FROM outing_expectations WHERE facility_id = $1 AND active = true',
+        [program.rows[0].facility_id]
       );
 
       const result = await emailService.sendScheduleNotification(
-        program[0],
-        schedule[0],
-        expectations.map(e => e.content),
-        facility[0],
+  program.rows[0],
+  schedule.rows[0],
+  expectations.rows.map(e => e.content),
+  facility.rows[0],
         includeColorCoding
       );
 
@@ -63,39 +63,39 @@ class EmailController {
 
       // Get all schedules for the date
       const schedules = await db.query(
-        'SELECT * FROM schedules WHERE schedule_date = ?',
+        'SELECT * FROM schedules WHERE schedule_date = $1',
         [scheduleDate]
       );
 
-      if (!schedules.length) {
+      if (!schedules.rows.length) {
         return res.status(404).json({ error: 'No schedules found for this date' });
       }
 
       // Get all programs
       const programs = await db.query(
-        'SELECT * FROM programs WHERE facility_id = ?',
-        [schedules[0].facility_id]
+        'SELECT * FROM programs WHERE facility_id = $1',
+        [schedules.rows[0].facility_id]
       );
 
       // Get facility settings
       const facility = await db.query(
-        'SELECT * FROM facilities WHERE id = ?',
-        [schedules[0].facility_id]
+        'SELECT * FROM facilities WHERE id = $1',
+        [schedules.rows[0].facility_id]
       );
 
       // Get expectations
       const expectations = await db.query(
-        'SELECT content FROM outing_expectations WHERE facility_id = ? AND active = true',
-        [schedules[0].facility_id]
+        'SELECT content FROM outing_expectations WHERE facility_id = $1 AND active = true',
+        [schedules.rows[0].facility_id]
       );
 
       const results = [];
-      for (const schedule of schedules) {
+    for (const schedule of schedules.rows) {
         const result = await emailService.sendBulkScheduleNotifications(
           schedule,
-          programs,
-          expectations.map(e => e.content),
-          facility[0]
+      programs.rows,
+      expectations.rows.map(e => e.content),
+      facility.rows[0]
         );
         results.push(...result);
       }
@@ -122,27 +122,28 @@ class EmailController {
       let query = `
         SELECT ea.*, p.color as house_color
         FROM email_archives ea
-        LEFT JOIN programs p ON ea.house_name = p.house_name
-        WHERE ea.facility_id = ?
+        LEFT JOIN programs p ON ea.house_name = p.house_name AND p.facility_id = ea.facility_id
+        WHERE ea.facility_id = $1
       `;
       const params = [req.facilityId || 1];
+      let idx = 2;
 
       if (house_name) {
-        query += ' AND ea.house_name = ?';
+        query += ` AND ea.house_name = $${idx++}`;
         params.push(house_name);
       }
 
       if (date_from) {
-        query += ' AND ea.schedule_date >= ?';
+        query += ` AND ea.schedule_date >= $${idx++}`;
         params.push(date_from);
       }
 
       if (date_to) {
-        query += ' AND ea.schedule_date <= ?';
+        query += ` AND ea.schedule_date <= $${idx++}`;
         params.push(date_to);
       }
 
-      query += ' ORDER BY ea.created_at DESC LIMIT ? OFFSET ?';
+      query += ` ORDER BY ea.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
       params.push(parseInt(limit), offset);
 
       const archives = await db.query(query, params);
@@ -151,31 +152,32 @@ class EmailController {
       let countQuery = `
         SELECT COUNT(*) as total
         FROM email_archives ea
-        WHERE ea.facility_id = ?
+        WHERE ea.facility_id = $1
       `;
       const countParams = [req.facilityId || 1];
+      let cidx = 2;
 
       if (house_name) {
-        countQuery += ' AND ea.house_name = ?';
+        countQuery += ` AND ea.house_name = $${cidx++}`;
         countParams.push(house_name);
       }
 
       if (date_from) {
-        countQuery += ' AND ea.schedule_date >= ?';
+        countQuery += ` AND ea.schedule_date >= $${cidx++}`;
         countParams.push(date_from);
       }
 
       if (date_to) {
-        countQuery += ' AND ea.schedule_date <= ?';
+        countQuery += ` AND ea.schedule_date <= $${cidx++}`;
         countParams.push(date_to);
       }
 
       const countResult = await db.query(countQuery, countParams);
-      const total = countResult[0].total;
+  const total = parseInt(countResult.rows[0].count, 10);
 
       res.json({
         success: true,
-        archives,
+  archives: archives.rows,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
@@ -196,15 +198,15 @@ class EmailController {
       const { type = 'html' } = req.query; // 'html' or 'pdf'
 
       const archive = await db.query(
-        'SELECT * FROM email_archives WHERE id = ?',
+        'SELECT * FROM email_archives WHERE id = $1',
         [archiveId]
       );
 
-      if (!archive.length) {
+      if (!archive.rows.length) {
         return res.status(404).json({ error: 'Archive not found' });
       }
 
-      const archiveData = archive[0];
+      const archiveData = archive.rows[0];
       const filePath = type === 'pdf' ? archiveData.pdf_path : archiveData.html_path;
 
       if (!filePath) {
@@ -258,21 +260,21 @@ class EmailController {
       // Update or insert email settings
       const updateQuery = `
         UPDATE email_settings SET
-          smtp_host = COALESCE(?, smtp_host),
-          smtp_port = COALESCE(?, smtp_port),
-          smtp_secure = COALESCE(?, smtp_secure),
-          smtp_user = COALESCE(?, smtp_user),
-          smtp_pass = COALESCE(?, smtp_pass),
-          from_email = COALESCE(?, from_email),
-          admin_email = COALESCE(?, admin_email),
-          daily_reminder_time = COALESCE(?, daily_reminder_time),
-          weekly_digest_day = COALESCE(?, weekly_digest_day),
-          weekly_digest_time = COALESCE(?, weekly_digest_time),
-          auto_reminders_enabled = COALESCE(?, auto_reminders_enabled),
-          color_coding_enabled = COALESCE(?, color_coding_enabled),
-          archive_enabled = COALESCE(?, archive_enabled),
+          smtp_host = COALESCE($1, smtp_host),
+          smtp_port = COALESCE($2, smtp_port),
+          smtp_secure = COALESCE($3, smtp_secure),
+          smtp_user = COALESCE($4, smtp_user),
+          smtp_pass = COALESCE($5, smtp_pass),
+          from_email = COALESCE($6, from_email),
+          admin_email = COALESCE($7, admin_email),
+          daily_reminder_time = COALESCE($8, daily_reminder_time),
+          weekly_digest_day = COALESCE($9, weekly_digest_day),
+          weekly_digest_time = COALESCE($10, weekly_digest_time),
+          auto_reminders_enabled = COALESCE($11, auto_reminders_enabled),
+          color_coding_enabled = COALESCE($12, color_coding_enabled),
+          archive_enabled = COALESCE($13, archive_enabled),
           updated_at = CURRENT_TIMESTAMP
-        WHERE facility_id = ?
+        WHERE facility_id = $14
       `;
 
       await db.query(updateQuery, [
@@ -284,22 +286,22 @@ class EmailController {
 
       // Reinitialize email service with new settings
       const settings = await db.query(
-        'SELECT * FROM email_settings WHERE facility_id = ?',
+        'SELECT * FROM email_settings WHERE facility_id = $1',
         [facilityId]
       );
 
-      if (settings.length) {
+      if (settings.rows.length) {
         emailService.initialize({
-          host: settings[0].smtp_host,
-          port: settings[0].smtp_port,
-          secure: settings[0].smtp_secure,
-          user: settings[0].smtp_user,
-          pass: settings[0].smtp_pass
+          host: settings.rows[0].smtp_host,
+          port: settings.rows[0].smtp_port,
+          secure: settings.rows[0].smtp_secure,
+          user: settings.rows[0].smtp_user,
+          pass: settings.rows[0].smtp_pass
         });
 
         // Restart automated reminders if enabled
-        if (settings[0].auto_reminders_enabled) {
-          emailService.setupAutomatedReminders(settings[0]);
+        if (settings.rows[0].auto_reminders_enabled) {
+          emailService.setupAutomatedReminders(settings.rows[0]);
         }
       }
 
@@ -316,16 +318,16 @@ class EmailController {
       const facilityId = req.facilityId || 1;
       
       const settings = await db.query(
-        'SELECT * FROM email_settings WHERE facility_id = ?',
+        'SELECT * FROM email_settings WHERE facility_id = $1',
         [facilityId]
       );
 
-      if (!settings.length) {
+      if (!settings.rows.length) {
         return res.status(404).json({ error: 'Email settings not found' });
       }
 
       // Don't return sensitive password data
-      const safeSettings = { ...settings[0] };
+  const safeSettings = { ...settings.rows[0] };
       delete safeSettings.smtp_pass;
 
       res.json({ success: true, settings: safeSettings });
@@ -363,7 +365,7 @@ class EmailController {
           COUNT(CASE WHEN email_type = 'reminder' THEN 1 END) as reminder_emails,
           MAX(created_at) as last_email_sent
         FROM email_archives 
-        WHERE facility_id = ? AND created_at >= ?
+        WHERE facility_id = $1 AND created_at >= $2
         GROUP BY house_name
         ORDER BY total_emails DESC
       `, [facilityId, dateFrom.toISOString()]);
@@ -375,14 +377,14 @@ class EmailController {
           COUNT(CASE WHEN email_type = 'schedule_notification' THEN 1 END) as schedule_emails,
           COUNT(CASE WHEN email_type = 'reminder' THEN 1 END) as reminder_emails
         FROM email_archives 
-        WHERE facility_id = ? AND created_at >= ?
+        WHERE facility_id = $1 AND created_at >= $2
       `, [facilityId, dateFrom.toISOString()]);
 
       res.json({
         success: true,
         period_days: parseInt(days),
-        by_house: stats,
-        totals: totalStats[0]
+  by_house: stats.rows,
+  totals: totalStats.rows[0]
       });
     } catch (error) {
       console.error('Error fetching email statistics:', error);
