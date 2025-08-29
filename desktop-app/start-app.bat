@@ -1,6 +1,9 @@
 @echo off
 title Family First Scheduler - Desktop App
 
+setlocal enableextensions
+set LOGFILE="%~dp0start-app.log"
+
 echo.
 echo 🏥 Family First Scheduler - Starting Desktop App...
 echo ================================================================
@@ -47,7 +50,7 @@ REM Install dependencies if needed
 if not exist "node_modules" (
     echo 📦 Installing dependencies for the first time...
     echo This may take a few minutes...
-    npm install
+    call npm install >> %LOGFILE% 2>&1
     echo.
 )
 
@@ -68,8 +71,14 @@ echo 🔄 To restart, run this script again
 echo ❌ To quit, close this window or press Ctrl+C
 echo.
 
-npm start
+REM Use CALL so the script continues after npm (npm is a .cmd on Windows)
+call npm start >> %LOGFILE% 2>&1
+
+set EXITCODE=%ERRORLEVEL%
 
 echo.
 echo 👋 Family First Scheduler has been closed.
+if not %EXITCODE%==0 (
+    echo ❗ The app exited with code %EXITCODE%. See %LOGFILE% for details.
+)
 pause
