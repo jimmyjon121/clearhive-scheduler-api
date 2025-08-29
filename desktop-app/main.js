@@ -17,12 +17,13 @@ function createMainWindow() {
     minWidth: 1200,
     minHeight: 700,
     webPreferences: {
-      nodeIntegration: false,
+      nodeIntegration: true,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: true,
+      allowRunningInsecureContent: false
     },
     icon: path.join(__dirname, 'assets', 'icon.png'),
-    titleBarStyle: 'hiddenInset',
     show: false
   });
 
