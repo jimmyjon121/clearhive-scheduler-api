@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family First Scheduler</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/components.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="app-logo">
+                    <h2>🏥 Family First</h2>
+                    <p>Scheduler</p>
+                </div>
+            </div>
+            
+            <div class="nav-menu">
+                <a href="#" class="nav-item active" data-view="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-view="programs">
+                    <span class="nav-icon">📋</span>
+                    <span class="nav-label">Programs</span>
+                </a>
+                <a href="#" class="nav-item" data-view="vendors">
+                    <span class="nav-icon">🏢</span>
+                    <span class="nav-label">Vendors</span>
+                </a>
+                <a href="#" class="nav-item" data-view="schedules">
+                    <span class="nav-icon">📅</span>
+                    <span class="nav-label">Schedules</span>
+                </a>
+                <a href="#" class="nav-item" data-view="reports">
+                    <span class="nav-icon">📈</span>
+                    <span class="nav-label">Reports</span>
+                </a>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="connection-status" id="connectionStatus">
+                    <div class="status-indicator offline"></div>
+                    <span>Disconnected</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Tabbed Navigation -->
+            <div class="tabs">
+                <button class="tab active" data-tab="overview">📊 Overview</button>
+                <button class="tab" data-tab="programs">📋 Programs</button>
+                <button class="tab" data-tab="vendors">🏢 Vendors</button>
+                <button class="tab" data-tab="schedules">📅 Schedules</button>
+                <button class="tab" data-tab="generate">⚡ Generate</button>
+            </div>
+
+            <!-- Tab Content Areas -->
+            <div id="overview" class="tab-content active">
+                <h2>System Overview</h2>
+                <div class="grid">
+                    <div class="card">
+                        <h3>📋 Programs</h3>
+                        <p id="programCount">Loading...</p>
+                        <p>Therapeutic programs available for scheduling</p>
+                    </div>
+                    <div class="card">
+                        <h3>🏢 Vendors</h3>
+                        <p id="vendorCount">Loading...</p>
+                        <p>Service providers and venues</p>
+                    </div>
+                    <div class="card">
+                        <h3>📅 Schedules</h3>
+                        <p id="scheduleCount">Loading...</p>
+                        <p>Active schedules in the system</p>
+                    </div>
+                </div>
+                <button id="refreshOverviewBtn">🔄 Refresh Data</button>
+            </div>
+
+            <div id="programs" class="tab-content">
+                <h2>📋 Therapeutic Programs</h2>
+                <div id="programsList"></div>
+                <button id="refreshProgramsBtn">🔄 Refresh Programs</button>
+            </div>
+
+            <div id="vendors" class="tab-content">
+                <h2>🏢 Vendors & Service Providers</h2>
+                <div id="vendorsList"></div>
+                <button id="refreshVendorsBtn">🔄 Refresh Vendors</button>
+            </div>
+
+            <div id="schedules" class="tab-content">
+                <h2>📅 Current Schedules</h2>
+                <div id="schedulesList"></div>
+                <button id="refreshSchedulesBtn">🔄 Refresh Schedules</button>
+            </div>
+
+            <div id="generate" class="tab-content">
+                <h2>⚡ Generate Schedules</h2>
+                <div class="card">
+                    <h3>Generate Weekly Schedule</h3>
+                    <p>Create a schedule for a specific week</p>
+                    <input type="date" id="weekDate" />
+                    <button id="generateWeekBtn">Generate Week</button>
+                    <div id="generateStatus"></div>
+                </div>
+                <div class="card">
+                    <h3>Generate Monthly Schedules</h3>
+                    <p>Create schedules for an entire month</p>
+                    <input type="month" id="monthDate" />
+                    <button id="generateMonthBtn">Generate Month</button>
+                    <div id="monthGenerateStatus"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Container -->
+    <div id="modalContainer" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Modal Title</h3>
+                <button class="close-modal" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Modal content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification System -->
+    <div id="notifications" class="notifications-container"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-spinner"></div>
+        <p>Loading...</p>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+{
+  "name": "family-first-scheduler-app",
+  "version": "1.0.0",
+  "description": "Desktop application for Family First Therapeutic Outing Scheduler",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build-win": "electron-builder --win",
+    "build-mac": "electron-builder --mac",
+    "build-linux": "electron-builder --linux",
+    "pack": "electron-builder --dir",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "keywords": [
+    "scheduler",
+    "therapeutic",
+    "desktop",
+    "healthcare"
+  ],
+  "author": "Family First",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^26.6.10",
+    "electron-builder": "^24.6.3"
+  },
+  "dependencies": {
+    "axios": "^1.5.0",
+    "chart.js": "^4.4.0",
+    "date-fns": "^2.30.0",
+    "electron-store": "^8.2.0"
+  },
+  "build": {
+    "appId": "com.familyfirst.scheduler",
+    "productName": "Family First Scheduler",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "assets/**/*",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.healthcare-fitness"
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": "nsis"
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": "AppImage"
+    }
+  }
+}
