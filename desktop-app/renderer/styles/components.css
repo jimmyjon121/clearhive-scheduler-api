@@ -11,18 +11,66 @@
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all var(--animation-normal) var(--ease-smooth);
     text-decoration: none;
     user-select: none;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Ripple effect for advanced mode */
+body.advanced-animations .btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+body.advanced-animations .btn:active::before {
+    width: 300px;
+    height: 300px;
+}
+
+/* 3D hover effect */
+body.advanced-animations .btn {
+    transform-style: preserve-3d;
+    perspective: 1000px;
+}
+
+body.advanced-animations .btn::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+    transform: translateX(-100%);
+    transition: transform 0.6s;
+}
+
+body.advanced-animations .btn:hover::after {
+    transform: translateX(100%);
 }
 
 .btn:hover {
-    transform: translateY(-1px);
+    transform: translateY(-2px) scale(1.05);
     box-shadow: var(--shadow-md);
 }
 
+body.advanced-animations .btn:hover {
+    animation: pulse var(--animation-slow) ease-in-out;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
 .btn:active {
-    transform: translateY(0);
+    transform: translateY(0) scale(0.98);
 }
 
 .btn-primary {
@@ -30,8 +78,18 @@
     color: var(--text-light);
 }
 
+body.advanced-animations .btn-primary {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+}
+
 .btn-primary:hover {
     background: var(--primary-dark);
+}
+
+body.advanced-animations .btn-primary:hover {
+    background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
+    box-shadow: 0 6px 20px rgba(52, 152, 219, 0.5);
 }
 
 .btn-secondary {
@@ -252,6 +310,10 @@
     border-left: 4px solid var(--primary-color);
     animation: notificationSlideIn 0.3s ease;
     position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    overflow: hidden;
 }
 
 @keyframes notificationSlideIn {
@@ -265,16 +327,80 @@
     }
 }
 
+.notification.removing {
+    animation: notificationSlideOut 0.3s ease forwards;
+}
+
+@keyframes notificationSlideOut {
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+}
+
+.notification-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.notification-message {
+    flex: 1;
+}
+
+.notification-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: currentColor;
+    width: 100%;
+    transform-origin: left;
+}
+
+@keyframes notificationProgress {
+    from {
+        transform: scaleX(1);
+    }
+    to {
+        transform: scaleX(0);
+    }
+}
+
+body.advanced-animations .notification {
+    backdrop-filter: blur(10px);
+    background: rgba(255,255,255,0.95);
+    transform-origin: right center;
+}
+
+body.advanced-animations .notification-icon {
+    animation: rotateIn 0.5s ease-out;
+}
+
 .notification.success {
     border-left-color: var(--success-color);
+    color: var(--success-color);
+}
+
+body.advanced-animations .notification.success {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.05), rgba(255,255,255,0.95));
 }
 
 .notification.error {
     border-left-color: var(--danger-color);
+    color: var(--danger-color);
+}
+
+body.advanced-animations .notification.error {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.05), rgba(255,255,255,0.95));
 }
 
 .notification.warning {
     border-left-color: var(--warning-color);
+    color: var(--warning-color);
+}
+
+body.advanced-animations .notification.warning {
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.05), rgba(255,255,255,0.95));
 }
 
 .notification-close {

@@ -9,69 +9,169 @@ class SchedulerApp {
             programs: [],
             vendors: [],
             schedules: [],
-            participants: []
+            stats: {
+                programs: 0,
+                vendors: 0,
+                schedules: 0
+            }
         };
         
         this.init();
     }
 
     async init() {
+        this.setupAnimationMode();
         this.setupEventListeners();
         await this.checkConnection();
         await this.loadInitialData();
-        this.showView('dashboard');
+        this.showTab('overview'); // Start with overview tab
+        this.initAdvancedAnimations();
+    }
+
+    setupAnimationMode() {
+        const modeToggle = document.getElementById('modeToggle');
+        const savedMode = localStorage.getItem('animationMode') || 'advanced';
+        
+        if (savedMode === 'simple') {
+            document.body.classList.remove('advanced-animations');
+            document.body.classList.add('simple-mode');
+            modeToggle.textContent = 'Simple Mode';
+        }
+        
+        modeToggle.addEventListener('click', () => {
+            const isAdvanced = document.body.classList.contains('advanced-animations');
+            
+            if (isAdvanced) {
+                document.body.classList.remove('advanced-animations');
+                document.body.classList.add('simple-mode');
+                modeToggle.textContent = 'Simple Mode';
+                localStorage.setItem('animationMode', 'simple');
+            } else {
+                document.body.classList.remove('simple-mode');
+                document.body.classList.add('advanced-animations');
+                modeToggle.textContent = 'Advanced Mode';
+                localStorage.setItem('animationMode', 'advanced');
+                this.initAdvancedAnimations();
+            }
+            
+            // Add a ripple effect on mode change
+            this.createRippleEffect(modeToggle);
+        });
+    }
+
+    initAdvancedAnimations() {
+        // Add staggered animations to elements
+        document.querySelectorAll('.nav-item').forEach((item, index) => {
+            item.style.setProperty('--item-index', index);
+        });
+        
+        document.querySelectorAll('.stat-card').forEach((card, index) => {
+            card.style.setProperty('--card-index', index);
+        });
+        
+        // Add parallax mouse effects
+        if (document.body.classList.contains('advanced-animations')) {
+            this.setupParallaxEffect();
+        }
+    }
+
+    setupParallaxEffect() {
+        const cards = document.querySelectorAll('.stat-card, .list-item');
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!document.body.classList.contains('advanced-animations')) return;
+            
+            const { clientX, clientY } = e;
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            
+            cards.forEach(card => {
+                const rect = card.getBoundingClientRect();
+                const cardCenterX = rect.left + rect.width / 2;
+                const cardCenterY = rect.top + rect.height / 2;
+                
+                const angleX = (clientY - cardCenterY) * 0.01;
+                const angleY = (clientX - cardCenterX) * 0.01;
+                
+                card.style.transform = `perspective(1000px) rotateX(${-angleX}deg) rotateY(${angleY}deg) scale(1.02)`;
+            });
+        });
+    }
+
+    createRippleEffect(element) {
+        const ripple = document.createElement('span');
+        const rect = element.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        
+        ripple.style.width = ripple.style.height = size + 'px';
+        ripple.style.left = '50%';
+        ripple.style.top = '50%';
+        ripple.style.position = 'absolute';
+        ripple.style.borderRadius = '50%';
+        ripple.style.transform = 'translate(-50%, -50%)';
+        ripple.style.background = 'rgba(255,255,255,0.5)';
+        ripple.style.pointerEvents = 'none';
+        ripple.style.animation = 'ripple 0.6s ease-out';
+        
+        element.style.position = 'relative';
+        element.style.overflow = 'hidden';
+        element.appendChild(ripple);
+        
+        setTimeout(() => ripple.remove(), 600);
     }
 
     setupEventListeners() {
-        // Navigation menu
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                const view = item.dataset.view;
-                this.showView(view);
-            });
-        });
-
-        // Modal close buttons
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('close-modal')) {
-                this.closeModal();
-            }
-        });
-
-        // Form submissions
-        document.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleFormSubmit(e);
-        });
-
-        // Refresh button
-        document.getElementById('refreshBtn')?.addEventListener('click', () => {
-            this.loadInitialData();
-        });
-
         // Tab click events
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
                 this.showTab(tab.dataset.tab);
+                if (document.body.classList.contains('advanced-animations')) {
+                    this.createRippleEffect(tab);
+                }
             });
         });
 
         // Refresh buttons
-        document.getElementById('refreshOverviewBtn')?.addEventListener('click', this.refreshOverview);
-        document.getElementById('refreshProgramsBtn')?.addEventListener('click', this.loadPrograms);
-        document.getElementById('refreshVendorsBtn')?.addEventListener('click', this.loadVendors);
-        document.getElementById('refreshSchedulesBtn')?.addEventListener('click', this.loadSchedules);
+        document.getElementById('refreshOverviewBtn')?.addEventListener('click', () => this.refreshOverview());
+        document.getElementById('refreshProgramsBtn')?.addEventListener('click', () => this.loadPrograms());
+        document.getElementById('refreshVendorsBtn')?.addEventListener('click', () => this.loadVendors());
+        document.getElementById('refreshSchedulesBtn')?.addEventListener('click', () => this.loadSchedules());
 
         // Generate buttons
-        document.getElementById('generateWeekBtn')?.addEventListener('click', this.generateWeekSchedule);
-        document.getElementById('generateMonthBtn')?.addEventListener('click', this.generateMonthSchedules);
+        document.getElementById('generateWeekBtn')?.addEventListener('click', () => this.generateWeekSchedule());
+        document.getElementById('generateMonthBtn')?.addEventListener('click', () => this.generateMonthSchedules());
 
         // Set default dates
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('weekDate')?.setAttribute('value', today);
         const currentMonth = new Date().toISOString().slice(0, 7);
         document.getElementById('monthDate')?.setAttribute('value', currentMonth);
+
+        // Navigation menu (sidebar)
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                // Remove active class from all items
+                document.querySelectorAll('.nav-item').forEach(navItem => {
+                    navItem.classList.remove('active');
+                });
+                // Add active class to clicked item
+                item.classList.add('active');
+                
+                // Map nav items to tabs
+                const viewMap = {
+                    'dashboard': 'overview',
+                    'programs': 'programs',
+                    'vendors': 'vendors',
+                    'schedules': 'schedules',
+                    'reports': 'generate'
+                };
+                
+                const view = item.dataset.view;
+                const tabName = viewMap[view] || view;
+                this.showTab(tabName);
+            });
+        });
     }
 
     async checkConnection() {
@@ -97,58 +197,46 @@ class SchedulerApp {
 
     async loadInitialData() {
         try {
-            // Load programs
-            const programsResponse = await fetch(`${this.apiUrl}/api/programs`);
-            this.data.programs = await programsResponse.json();
-
-            // Load vendors
-            const vendorsResponse = await fetch(`${this.apiUrl}/api/vendors`);
-            this.data.vendors = await vendorsResponse.json();
-
-            // Load schedules
-            const schedulesResponse = await fetch(`${this.apiUrl}/api/schedules`);
-            this.data.schedules = await schedulesResponse.json();
-
-            // Update current view
-            this.updateCurrentView();
+            // Load initial overview data
+            await this.refreshOverview();
         } catch (error) {
             console.error('Failed to load data:', error);
             this.showNotification('Failed to load data. Please check your connection.', 'error');
         }
     }
 
-    showView(viewName) {
-        // Update navigation
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
-        });
-        document.querySelector(`[data-view="${viewName}"]`).classList.add('active');
-
-        // Update content area
-        this.currentView = viewName;
-        this.updateCurrentView();
-    }
-
-    updateCurrentView() {
-        const content = document.getElementById('mainContent');
+    showNotification(message, type = 'info') {
+        const container = document.getElementById('notifications');
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
         
-        switch (this.currentView) {
-            case 'dashboard':
-                content.innerHTML = this.renderDashboard();
-                break;
-            case 'programs':
-                content.innerHTML = this.renderPrograms();
-                break;
-            case 'vendors':
-                content.innerHTML = this.renderVendors();
-                break;
-            case 'schedules':
-                content.innerHTML = this.renderSchedules();
-                break;
-            case 'reports':
-                content.innerHTML = this.renderReports();
-                break;
+        // Add icon based on type
+        const icons = {
+            'success': '✅',
+            'error': '❌',
+            'warning': '⚠️',
+            'info': 'ℹ️'
+        };
+        
+        notification.innerHTML = `
+            <span class="notification-icon">${icons[type] || icons.info}</span>
+            <span class="notification-message">${message}</span>
+            <button class="notification-close" onclick="this.parentElement.classList.add('removing'); setTimeout(() => this.parentElement.remove(), 300)">×</button>
+            <div class="notification-progress"></div>
+        `;
+        
+        container.appendChild(notification);
+        
+        // Animate progress bar
+        if (document.body.classList.contains('advanced-animations')) {
+            const progressBar = notification.querySelector('.notification-progress');
+            progressBar.style.animation = 'notificationProgress 5s linear';
         }
+        
+        setTimeout(() => {
+            notification.classList.add('removing');
+            setTimeout(() => notification.remove(), 300);
+        }, 5000);
     }
 
     renderDashboard() {
@@ -607,79 +695,145 @@ class SchedulerApp {
 
     async refreshOverview() {
         try {
+            // Get status from setup endpoint
             const response = await fetch(`${API_BASE}/api/v1/setup/status`);
-            const data = await response.json();
-            if (data.stats) {
-                document.getElementById('programCount').textContent = `${data.stats.programs} programs`;
-                document.getElementById('vendorCount').textContent = `${data.stats.vendors} vendors`;
-                document.getElementById('scheduleCount').textContent = `${data.stats.schedules} schedules`;
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-            const statusMsg = data.status === 'healthy' ? '✅ System is healthy and ready' : '⚠️ System needs attention';
-            this.showNotification(statusMsg, data.status === 'healthy' ? 'success' : 'warning');
+            const data = await response.json();
+            
+            // Update counts
+            if (data.stats) {
+                document.getElementById('programCount').textContent = `${data.stats.programs || 0}`;
+                document.getElementById('vendorCount').textContent = `${data.stats.vendors || 0}`;
+                document.getElementById('scheduleCount').textContent = `${data.stats.schedules || 0}`;
+            }
+            
+            // Also load the actual data for the overview
+            await this.loadPrograms();
+            await this.loadVendors();
+            
         } catch (error) {
-            this.showNotification(`❌ Connection failed: ${error.message}`, 'error');
+            console.error('Failed to refresh overview:', error);
+            document.getElementById('programCount').textContent = 'Error loading';
+            document.getElementById('vendorCount').textContent = 'Error loading';
+            document.getElementById('scheduleCount').textContent = 'Error loading';
+            this.showNotification(`❌ Failed to load data: ${error.message}`, 'error');
         }
     }
 
     async loadPrograms() {
         try {
-            const response = await fetch(`${API_BASE}/api/v1/programs`);
+            const response = await fetch(`${API_BASE}/api/v1/programs?facility_id=1`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             const programs = await response.json();
+            
+            this.data.programs = programs; // Store for later use
+            
             const programsList = document.getElementById('programsList');
-            programsList.innerHTML = programs.map(program => `
-                <div class="list-item">
-                    <h4>${program.name}</h4>
-                    <p><strong>Type:</strong> ${program.program_type}</p>
-                    <p><strong>Duration:</strong> ${program.duration_hours} hours</p>
-                    <p><strong>Description:</strong> ${program.description}</p>
-                    <p><strong>Capacity:</strong> ${program.max_participants} participants</p>
-                </div>
-            `).join('');
+            if (programsList) {
+                if (programs.length === 0) {
+                    programsList.innerHTML = '<div class="empty-state">No programs found. Add your first program!</div>';
+                } else {
+                    programsList.innerHTML = programs.map(program => `
+                        <div class="list-item" style="border-left: 4px solid ${program.color || '#3498db'}">
+                            <h4>${program.house_name || program.name || 'Unnamed Program'}</h4>
+                            <p><strong>Schedule:</strong> Tuesday ${program.tuesday_start || 'N/A'} - ${program.tuesday_end || 'N/A'}</p>
+                            <p><strong>Priority:</strong> ${program.priority || 'N/A'}</p>
+                            <p><strong>Coordinator Email:</strong> ${program.program_coordinator_email || 'Not set'}</p>
+                            <p><strong>Color:</strong> <span style="display: inline-block; width: 20px; height: 20px; background: ${program.color || '#ccc'}; vertical-align: middle;"></span> ${program.color || 'Not set'}</p>
+                        </div>
+                    `).join('');
+                }
+            }
         } catch (error) {
-            document.getElementById('programsList').innerHTML = `<div class="status error">Failed to load programs: ${error.message}</div>`;
+            console.error('Failed to load programs:', error);
+            const programsList = document.getElementById('programsList');
+            if (programsList) {
+                programsList.innerHTML = `<div class="error-state">Failed to load programs: ${error.message}</div>`;
+            }
         }
     }
 
     async loadVendors() {
         try {
-            const response = await fetch(`${API_BASE}/api/v1/vendors`);
+            const response = await fetch(`${API_BASE}/api/v1/vendors?facility_id=1`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             const vendors = await response.json();
+            
+            this.data.vendors = vendors; // Store for later use
+            
             const vendorsList = document.getElementById('vendorsList');
-            vendorsList.innerHTML = vendors.map(vendor => `
-                <div class="list-item">
-                    <h4>${vendor.name}</h4>
-                    <p><strong>Type:</strong> ${vendor.vendor_type}</p>
-                    <p><strong>Contact:</strong> ${vendor.contact_info}</p>
-                    <p><strong>Location:</strong> ${vendor.location}</p>
-                    <p><strong>Capacity:</strong> ${vendor.capacity} people</p>
-                    <p><strong>Available:</strong> ${vendor.availability}</p>
-                </div>
-            `).join('');
+            if (vendorsList) {
+                if (vendors.length === 0) {
+                    vendorsList.innerHTML = '<div class="empty-state">No vendors found. Add your first vendor!</div>';
+                } else {
+                    vendorsList.innerHTML = vendors.map(vendor => `
+                        <div class="list-item" style="border-left: 4px solid ${vendor.color || '#6c757d'}">
+                            <h4>${vendor.name || 'Unnamed Vendor'}</h4>
+                            <p><strong>Type:</strong> ${vendor.vendor_type || 'Not specified'}</p>
+                            <p><strong>Contact:</strong> ${vendor.contact || 'N/A'} ${vendor.phone ? `- ${vendor.phone}` : ''}</p>
+                            <p><strong>Email:</strong> ${vendor.email || 'Not provided'}</p>
+                            <p><strong>Address:</strong> ${vendor.address || 'Not provided'}</p>
+                            <p><strong>Capacity:</strong> ${vendor.capacity || 10} people</p>
+                            ${vendor.is_rotation_vendor ? '<p><strong>🔄 Rotation Vendor</strong> (' + vendor.rotation_weeks + ' week rotation)</p>' : ''}
+                        </div>
+                    `).join('');
+                }
+            }
         } catch (error) {
-            document.getElementById('vendorsList').innerHTML = `<div class="status error">Failed to load vendors: ${error.message}</div>`;
+            console.error('Failed to load vendors:', error);
+            const vendorsList = document.getElementById('vendorsList');
+            if (vendorsList) {
+                vendorsList.innerHTML = `<div class="error-state">Failed to load vendors: ${error.message}</div>`;
+            }
         }
     }
 
     async loadSchedules() {
         try {
-            const response = await fetch(`${API_BASE}/api/v1/schedules`);
-            const schedules = await response.json();
-            const schedulesList = document.getElementById('schedulesList');
-            if (schedules.length === 0) {
-                schedulesList.innerHTML = `<div class="status warning">No schedules found. Use the Generate tab to create some schedules!</div>`;
-                return;
+            const response = await fetch(`${API_BASE}/api/v1/schedules?facility_id=1`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-            schedulesList.innerHTML = schedules.map(schedule => `
-                <div class="list-item">
-                    <h4>Schedule for ${new Date(schedule.schedule_date).toLocaleDateString()}</h4>
-                    <p><strong>Program:</strong> ${schedule.program_name || 'N/A'}</p>
-                    <p><strong>Vendor:</strong> ${schedule.vendor_name || 'N/A'}</p>
-                    <p><strong>Time:</strong> ${schedule.start_time} - ${schedule.end_time}</p>
-                    <p><strong>Participants:</strong> ${schedule.participant_count}</p>
-                </div>
-            `).join('');
+            const schedules = await response.json();
+            
+            this.data.schedules = schedules;
+            
+            const schedulesList = document.getElementById('schedulesList');
+            if (schedulesList) {
+                if (schedules.length === 0) {
+                    schedulesList.innerHTML = `<div class="empty-state">
+                        <p>No schedules found.</p>
+                        <p>Use the Generate tab to create schedules!</p>
+                    </div>`;
+                } else {
+                    schedulesList.innerHTML = schedules.map(schedule => {
+                        const assignments = schedule.assignments || {};
+                        const scheduleItems = Object.entries(assignments).map(([programName, vendorId]) => {
+                            const vendor = this.data.vendors.find(v => v.id === vendorId);
+                            return `<li>${programName} → ${vendor ? vendor.name : 'Unknown Vendor'}</li>`;
+                        }).join('');
+                        
+                        return `
+                            <div class="list-item">
+                                <h4>Schedule for ${new Date(schedule.schedule_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h4>
+                                ${scheduleItems ? `<ul>${scheduleItems}</ul>` : '<p>No assignments yet</p>'}
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
         } catch (error) {
-            document.getElementById('schedulesList').innerHTML = `<div class="status error">Failed to load schedules: ${error.message}</div>`;
+            console.error('Failed to load schedules:', error);
+            const schedulesList = document.getElementById('schedulesList');
+            if (schedulesList) {
+                schedulesList.innerHTML = `<div class="error-state">Failed to load schedules: ${error.message}</div>`;
+            }
         }
     }
 
@@ -690,19 +844,29 @@ class SchedulerApp {
             return;
         }
         try {
-            this.showNotification('🔄 Generating weekly schedule...', 'warning');
-            const response = await fetch(`${API_BASE}/api/v1/schedules/generate/week`, {
+            this.showNotification('🔄 Generating weekly schedule...', 'info');
+            
+            // Use the advanced schedule generation endpoint
+            const response = await fetch(`${API_BASE}/api/v1/advanced-schedules/generate-week`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ startDate: weekDate })
+                body: JSON.stringify({ 
+                    facility_id: 1,
+                    start_date: weekDate,
+                    weeks: 1
+                })
             });
-            const result = await response.json();
-            if (result.success) {
-                this.showNotification(`✅ Generated ${result.schedulesCreated} schedules for the week!`);
-                this.refreshOverview();
-            } else {
-                this.showNotification(`❌ Failed: ${result.message}`, 'error');
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
             }
+            
+            const result = await response.json();
+            this.showNotification(`✅ Generated schedule for week of ${weekDate}!`, 'success');
+            await this.loadSchedules(); // Reload schedules
+            this.showTab('schedules'); // Switch to schedules tab
+            
         } catch (error) {
             this.showNotification(`❌ Error: ${error.message}`, 'error');
         }
@@ -715,20 +879,39 @@ class SchedulerApp {
             return;
         }
         try {
-            this.showNotification('🔄 Generating monthly schedules...', 'warning');
+            this.showNotification('🔄 Generating monthly schedules...', 'info');
+            
+            // Calculate start date and weeks for the month
             const [year, month] = monthDate.split('-');
-            const response = await fetch(`${API_BASE}/api/v1/schedules/generate/month`, {
+            const startDate = new Date(year, month - 1, 1);
+            const endDate = new Date(year, month, 0);
+            const weeks = Math.ceil((endDate.getDate()) / 7);
+            
+            // Find the first Tuesday of the month
+            while (startDate.getDay() !== 2) {
+                startDate.setDate(startDate.getDate() + 1);
+            }
+            
+            const response = await fetch(`${API_BASE}/api/v1/advanced-schedules/generate-year`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ year: parseInt(year), month: parseInt(month) })
+                body: JSON.stringify({ 
+                    facility_id: 1,
+                    start_date: startDate.toISOString().split('T')[0],
+                    weeks: weeks
+                })
             });
-            const result = await response.json();
-            if (result.success) {
-                this.showNotification(`✅ Generated ${result.schedulesCreated} schedules for the month!`);
-                this.refreshOverview();
-            } else {
-                this.showNotification(`❌ Failed: ${result.message}`, 'error');
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
             }
+            
+            const result = await response.json();
+            this.showNotification(`✅ Generated ${result.schedules ? result.schedules.length : weeks} schedules for ${monthDate}!`, 'success');
+            await this.loadSchedules(); // Reload schedules
+            this.showTab('schedules'); // Switch to schedules tab
+            
         } catch (error) {
             this.showNotification(`❌ Error: ${error.message}`, 'error');
         }
