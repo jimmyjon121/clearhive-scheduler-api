@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family First Scheduler - Complete Interface</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 12px 24px;
+            background: #e9ecef;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .tab.active {
+            background: #3498db;
+            color: white;
+        }
+        .tab-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .tab-content.active { display: block; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+        .success { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
+        .error { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
+        .warning { background: #fff3cd; color: #856404; border-left: 4px solid #ffc107; }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 14px;
+            margin: 8px 0;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover { background: #2980b9; }
+        button.secondary { background: #6c757d; }
+        button.danger { background: #dc3545; }
+        .list-item {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #17a2b8;
+            margin: 10px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .day-header {
+            background: #495057;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+        .day-cell {
+            background: white;
+            min-height: 100px;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 Family First Therapeutic Outing Scheduler</h1>
+            <p>Manage programs, vendors, and schedules for therapeutic outings</p>
+            <div id="connectionStatus"></div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('overview')">📊 Overview</button>
+            <button class="tab" onclick="showTab('programs')">📋 Programs</button>
+            <button class="tab" onclick="showTab('vendors')">🏢 Vendors</button>
+            <button class="tab" onclick="showTab('schedules')">📅 Schedules</button>
+            <button class="tab" onclick="showTab('generate')">⚡ Generate</button>
+        </div>
+
+        <!-- Overview Tab -->
+        <div id="overview" class="tab-content active">
+            <h2>System Overview</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>📋 Programs</h3>
+                    <p id="programCount">Loading...</p>
+                    <p>Therapeutic programs available for scheduling</p>
+                </div>
+                <div class="card">
+                    <h3>🏢 Vendors</h3>
+                    <p id="vendorCount">Loading...</p>
+                    <p>Service providers and venues</p>
+                </div>
+                <div class="card">
+                    <h3>📅 Schedules</h3>
+                    <p id="scheduleCount">Loading...</p>
+                    <p>Active schedules in the system</p>
+                </div>
+            </div>
+            <button onclick="refreshOverview()">🔄 Refresh Data</button>
+        </div>
+
+        <!-- Programs Tab -->
+        <div id="programs" class="tab-content">
+            <h2>📋 Therapeutic Programs</h2>
+            <div id="programsList"></div>
+            <button onclick="loadPrograms()">🔄 Refresh Programs</button>
+        </div>
+
+        <!-- Vendors Tab -->
+        <div id="vendors" class="tab-content">
+            <h2>🏢 Vendors & Service Providers</h2>
+            <div id="vendorsList"></div>
+            <button onclick="loadVendors()">🔄 Refresh Vendors</button>
+        </div>
+
+        <!-- Schedules Tab -->
+        <div id="schedules" class="tab-content">
+            <h2>📅 Current Schedules</h2>
+            <div id="schedulesList"></div>
+            <button onclick="loadSchedules()">🔄 Refresh Schedules</button>
+        </div>
+
+        <!-- Generate Tab -->
+        <div id="generate" class="tab-content">
+            <h2>⚡ Generate Schedules</h2>
+            <div class="card">
+                <h3>Generate Weekly Schedule</h3>
+                <p>Create a schedule for a specific week</p>
+                <input type="date" id="weekDate" />
+                <button onclick="generateWeekSchedule()">Generate Week</button>
+                <div id="generateStatus"></div>
+            </div>
+            <div class="card">
+                <h3>Generate Monthly Schedules</h3>
+                <p>Create schedules for an entire month</p>
+                <input type="month" id="monthDate" />
+                <button onclick="generateMonthSchedules()">Generate Month</button>
+                <div id="monthGenerateStatus"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://clearhive-scheduler-api-production-4c35.up.railway.app';
+
+        // Tab management
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+            
+            // Load data for the tab
+            if (tabName === 'programs') loadPrograms();
+            if (tabName === 'vendors') loadVendors();
+            if (tabName === 'schedules') loadSchedules();
+        }
+
+        // Show status messages
+        function showStatus(elementId, message, type = 'success') {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.innerHTML = `<div class="status ${type}">${message}</div>`;
+            }
+        }
+
+        // Load overview data
+        async function refreshOverview() {
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/setup/status`);
+                const data = await response.json();
+                
+                if (data.stats) {
+                    document.getElementById('programCount').textContent = `${data.stats.programs} programs`;
+                    document.getElementById('vendorCount').textContent = `${data.stats.vendors} vendors`;
+                    document.getElementById('scheduleCount').textContent = `${data.stats.schedules} schedules`;
+                }
+                
+                const statusMsg = data.status === 'healthy' ? 
+                    '✅ System is healthy and ready' : 
+                    '⚠️ System needs attention';
+                showStatus('connectionStatus', statusMsg, data.status === 'healthy' ? 'success' : 'warning');
+                
+            } catch (error) {
+                showStatus('connectionStatus', `❌ Connection failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Load programs
+        async function loadPrograms() {
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/programs`);
+                const programs = await response.json();
+                
+                const programsList = document.getElementById('programsList');
+                programsList.innerHTML = programs.map(program => `
+                    <div class="list-item">
+                        <h4>${program.name}</h4>
+                        <p><strong>Type:</strong> ${program.program_type}</p>
+                        <p><strong>Duration:</strong> ${program.duration_hours} hours</p>
+                        <p><strong>Description:</strong> ${program.description}</p>
+                        <p><strong>Capacity:</strong> ${program.max_participants} participants</p>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                document.getElementById('programsList').innerHTML = 
+                    `<div class="status error">Failed to load programs: ${error.message}</div>`;
+            }
+        }
+
+        // Load vendors
+        async function loadVendors() {
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/vendors`);
+                const vendors = await response.json();
+                
+                const vendorsList = document.getElementById('vendorsList');
+                vendorsList.innerHTML = vendors.map(vendor => `
+                    <div class="list-item">
+                        <h4>${vendor.name}</h4>
+                        <p><strong>Type:</strong> ${vendor.vendor_type}</p>
+                        <p><strong>Contact:</strong> ${vendor.contact_info}</p>
+                        <p><strong>Location:</strong> ${vendor.location}</p>
+                        <p><strong>Capacity:</strong> ${vendor.capacity} people</p>
+                        <p><strong>Available:</strong> ${vendor.availability}</p>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                document.getElementById('vendorsList').innerHTML = 
+                    `<div class="status error">Failed to load vendors: ${error.message}</div>`;
+            }
+        }
+
+        // Load schedules
+        async function loadSchedules() {
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/schedules`);
+                const schedules = await response.json();
+                
+                const schedulesList = document.getElementById('schedulesList');
+                if (schedules.length === 0) {
+                    schedulesList.innerHTML = `
+                        <div class="status warning">
+                            No schedules found. Use the Generate tab to create some schedules!
+                        </div>
+                    `;
+                    return;
+                }
+                
+                schedulesList.innerHTML = schedules.map(schedule => `
+                    <div class="list-item">
+                        <h4>Schedule for ${new Date(schedule.schedule_date).toLocaleDateString()}</h4>
+                        <p><strong>Program:</strong> ${schedule.program_name || 'N/A'}</p>
+                        <p><strong>Vendor:</strong> ${schedule.vendor_name || 'N/A'}</p>
+                        <p><strong>Time:</strong> ${schedule.start_time} - ${schedule.end_time}</p>
+                        <p><strong>Participants:</strong> ${schedule.participant_count}</p>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                document.getElementById('schedulesList').innerHTML = 
+                    `<div class="status error">Failed to load schedules: ${error.message}</div>`;
+            }
+        }
+
+        // Generate week schedule
+        async function generateWeekSchedule() {
+            const weekDate = document.getElementById('weekDate').value;
+            if (!weekDate) {
+                showStatus('generateStatus', 'Please select a date', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('generateStatus', '🔄 Generating weekly schedule...', 'warning');
+                
+                const response = await fetch(`${API_BASE}/api/v1/schedules/generate/week`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ startDate: weekDate })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('generateStatus', `✅ Generated ${result.schedulesCreated} schedules for the week!`);
+                    refreshOverview(); // Update the overview counts
+                } else {
+                    showStatus('generateStatus', `❌ Failed: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                showStatus('generateStatus', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Generate month schedules
+        async function generateMonthSchedules() {
+            const monthDate = document.getElementById('monthDate').value;
+            if (!monthDate) {
+                showStatus('monthGenerateStatus', 'Please select a month', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('monthGenerateStatus', '🔄 Generating monthly schedules...', 'warning');
+                
+                const [year, month] = monthDate.split('-');
+                const response = await fetch(`${API_BASE}/api/v1/schedules/generate/month`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ year: parseInt(year), month: parseInt(month) })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('monthGenerateStatus', `✅ Generated ${result.schedulesCreated} schedules for the month!`);
+                    refreshOverview(); // Update the overview counts
+                } else {
+                    showStatus('monthGenerateStatus', `❌ Failed: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                showStatus('monthGenerateStatus', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize the interface
+        window.onload = () => {
+            refreshOverview();
+            
+            // Set today's date as default
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('weekDate').value = today;
+            
+            // Set current month as default
+            const currentMonth = new Date().toISOString().slice(0, 7);
+            document.getElementById('monthDate').value = currentMonth;
+        };
+    </script>
+</body>
+</html>

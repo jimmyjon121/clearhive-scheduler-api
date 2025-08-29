@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Submit Incident Report</title>
+    <link rel="stylesheet" href="styles/incident-form.css">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+    <div class="mobile-container">
+        <!-- Mobile Header -->
+        <header class="mobile-header">
+            <h1>Quick Report</h1>
+            <button class="close-btn" onclick="window.close()">✕</button>
+        </header>
+
+        <!-- Report Type Selection -->
+        <div class="report-type-section">
+            <h2>What would you like to report?</h2>
+            <div class="type-buttons">
+                <button class="type-btn incident-btn active" data-type="incident">
+                    <span class="icon">⚠️</span>
+                    <span class="label">Incident</span>
+                </button>
+                <button class="type-btn note-btn" data-type="note">
+                    <span class="icon">📝</span>
+                    <span class="label">Note</span>
+                </button>
+                <button class="type-btn progress-btn" data-type="progress">
+                    <span class="icon">📈</span>
+                    <span class="label">Progress</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Form Container -->
+        <form id="reportForm" class="report-form">
+            <!-- Program/Client Selection -->
+            <div class="form-section">
+                <label class="required">Program</label>
+                <select id="programSelect" required>
+                    <option value="">Select a program...</option>
+                    <!-- Programs will be loaded dynamically -->
+                </select>
+            </div>
+
+            <div class="form-section">
+                <label class="required">Client</label>
+                <input type="text" id="clientName" placeholder="Enter client name" required>
+            </div>
+
+            <!-- Incident Type (for incident reports) -->
+            <div class="form-section incident-fields">
+                <label class="required">Incident Type</label>
+                <select id="incidentType" required>
+                    <option value="">Select incident type...</option>
+                    <option value="behavioral">Behavioral</option>
+                    <option value="medical">Medical</option>
+                    <option value="safety">Safety</option>
+                    <option value="property">Property Damage</option>
+                    <option value="elopement">Elopement</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+
+            <!-- Severity Level (for incident reports) -->
+            <div class="form-section incident-fields">
+                <label class="required">Severity</label>
+                <div class="severity-buttons">
+                    <button type="button" class="severity-btn low" data-severity="low">Low</button>
+                    <button type="button" class="severity-btn medium" data-severity="medium">Medium</button>
+                    <button type="button" class="severity-btn high" data-severity="high">High</button>
+                    <button type="button" class="severity-btn critical" data-severity="critical">Critical</button>
+                </div>
+                <input type="hidden" id="severity" required>
+            </div>
+
+            <!-- Progress Type (for progress notes) -->
+            <div class="form-section progress-fields" style="display: none;">
+                <label>Progress Area</label>
+                <select id="progressArea">
+                    <option value="">Select area...</option>
+                    <option value="social">Social Skills</option>
+                    <option value="communication">Communication</option>
+                    <option value="motor">Motor Skills</option>
+                    <option value="behavioral">Behavioral</option>
+                    <option value="academic">Academic</option>
+                    <option value="independent">Independent Living</option>
+                </select>
+            </div>
+
+            <!-- Date/Time -->
+            <div class="form-section">
+                <label class="required">Date & Time</label>
+                <div class="datetime-inputs">
+                    <input type="date" id="incidentDate" required>
+                    <input type="time" id="incidentTime" required>
+                </div>
+                <button type="button" class="quick-time-btn">Use Current Time</button>
+            </div>
+
+            <!-- Location -->
+            <div class="form-section">
+                <label class="required">Location</label>
+                <input type="text" id="location" placeholder="Where did this occur?" required>
+                <button type="button" class="location-btn">📍 Use Current Location</button>
+            </div>
+
+            <!-- Description -->
+            <div class="form-section">
+                <label class="required">Description</label>
+                <textarea id="description" rows="4" placeholder="Describe what happened..." required></textarea>
+                <div class="char-counter">0/500</div>
+            </div>
+
+            <!-- Actions Taken (for incidents) -->
+            <div class="form-section incident-fields">
+                <label>Actions Taken</label>
+                <textarea id="actionsTaken" rows="3" placeholder="What actions were taken?"></textarea>
+            </div>
+
+            <!-- Photo Upload -->
+            <div class="form-section">
+                <label>Add Photos (Optional)</label>
+                <div class="photo-upload">
+                    <input type="file" id="photoInput" accept="image/*" multiple style="display: none;">
+                    <button type="button" class="photo-btn">
+                        <span class="icon">📷</span>
+                        <span>Add Photo</span>
+                    </button>
+                    <div id="photoPreview" class="photo-preview"></div>
+                </div>
+            </div>
+
+            <!-- Witnesses -->
+            <div class="form-section incident-fields">
+                <label>Witnesses</label>
+                <div id="witnessContainer">
+                    <input type="text" class="witness-input" placeholder="Witness name">
+                </div>
+                <button type="button" class="add-witness-btn">+ Add Another Witness</button>
+            </div>
+
+            <!-- Notifications -->
+            <div class="form-section incident-fields">
+                <label>Notify</label>
+                <div class="notification-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="notifySupervisor" checked>
+                        <span>Supervisor</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="notifyParent">
+                        <span>Parent/Guardian</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="notifyAdmin">
+                        <span>Administration</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Staff Information -->
+            <div class="form-section">
+                <label class="required">Your Name</label>
+                <input type="text" id="staffName" placeholder="Enter your name" required>
+            </div>
+
+            <div class="form-section">
+                <label class="required">Your Role</label>
+                <select id="staffRole" required>
+                    <option value="">Select your role...</option>
+                    <option value="bht">BHT</option>
+                    <option value="rbt">RBT</option>
+                    <option value="bcba">BCBA</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="form-actions">
+                <button type="submit" class="submit-btn">
+                    <span class="submit-text">Submit Report</span>
+                    <span class="loading-spinner" style="display: none;">⏳</span>
+                </button>
+            </div>
+        </form>
+
+        <!-- Success Message -->
+        <div id="successMessage" class="success-message" style="display: none;">
+            <div class="success-icon">✅</div>
+            <h2>Report Submitted Successfully</h2>
+            <p>Your report has been saved and notifications have been sent.</p>
+            <button class="btn-primary" onclick="resetForm()">Submit Another</button>
+            <button class="btn-secondary" onclick="window.close()">Close</button>
+        </div>
+    </div>
+
+    <script src="js/incident-form.js"></script>
+</body>
+</html>
