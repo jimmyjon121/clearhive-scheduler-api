@@ -1,52 +1,65 @@
 @echo off
-REM Debug launcher to diagnose startup issues on Windows.
-REM Keeps the console open and enables Electron logging.
+REM Simple debug launcher that definitely keeps the window open
 
-title Family First Scheduler - Debug Launcher
-setlocal enableextensions
+echo ================================================
+echo Family First Scheduler - Simple Debug Mode
+echo ================================================
+echo.
+echo This window will stay open - press any key to continue...
+pause >nul
 
 cd /d "%~dp0"
 
-echo -----------------------------------------------
-echo Family First Scheduler - Debug Launcher (Windows)
-echo -----------------------------------------------
-
-REM Basic checks
-node --version >nul 2>&1
-if errorlevel 1 (
-  echo Node.js is not installed or not on PATH.
-  echo Install from https://nodejs.org and try again.
-  goto :HOLD
-)
-npm --version >nul 2>&1
-if errorlevel 1 (
-  echo npm is not installed or not on PATH.
-  echo Reinstall Node.js which includes npm.
-  goto :HOLD
-)
+echo Current directory: %CD%
+echo.
 
 if not exist "package.json" (
-  echo package.json not found. Please run from the desktop-app directory.
-  goto :HOLD
+    echo ERROR: package.json not found!
+    echo Please run this from the desktop-app directory.
+    goto :END
 )
 
-echo Installing dependencies (if needed)...
-call npm install
+echo [+] package.json found
+
+node --version >nul 2>&1
 if errorlevel 1 (
-  echo npm install failed. Check your internet connection or proxy settings.
-  goto :HOLD
+    echo ERROR: Node.js not found!
+    goto :END
+)
+echo [+] Node.js is installed
+
+npm --version >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: npm not found!
+    goto :END
+)
+echo [+] npm is installed
+
+if not exist "node_modules" (
+    echo Installing dependencies...
+    call npm install
+    if errorlevel 1 (
+        echo ERROR: npm install failed!
+        goto :END
+    )
 )
 
-echo Enabling Electron debug logs...
-set ELECTRON_ENABLE_LOGGING=1
-set ELECTRON_ENABLE_STACK_DUMPING=1
-set DEBUG=*
+echo [+] Dependencies ready
 
-echo Starting app...
-REM Use cmd /k to keep the window open after Electron exits
-cmd /k npm start
+echo.
+echo Starting Electron app...
+echo (This window will stay open)
+echo.
 
-:HOLD
+REM Start with error output visible
+npx electron . 2>&1
+
+echo.
+echo Electron app has exited.
+echo Exit code: %ERRORLEVEL%
+
+:END
 echo.
 echo Press any key to close this window...
 pause >nul
+
