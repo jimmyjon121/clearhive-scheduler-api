@@ -4,150 +4,108 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Family First Scheduler</title>
-    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/main-new.css">
     <link rel="stylesheet" href="styles/components.css">
 </head>
-<body class="advanced-animations">
-    <!-- Mode Toggle Button -->
-    <button class="mode-toggle" id="modeToggle" title="Toggle UI Mode">
-        Advanced Mode
-    </button>
+<body>
+    <div class="app">
+        <!-- Single Clean Header -->
+        <header class="app-header">
+            <h1>Family First Scheduler</h1>
+            <div class="header-actions">
+                <span class="status-indicator" id="connectionStatus">
+                    <span class="status-dot online"></span>
+                    Connected
+                </span>
+                <button class="btn-primary" id="sendRemindersBtn">📧 Send Reminders</button>
+            </div>
+        </header>
 
-    <div class="app-container">
-        <!-- Sidebar Navigation -->
-        <nav class="sidebar">
-            <div class="sidebar-header">
-                <div class="app-logo">
-                    <h2>🏥 Family First</h2>
-                    <p>Scheduler</p>
-                </div>
-            </div>
-            
-            <div class="nav-menu">
-                <a href="#" class="nav-item active" data-view="dashboard">
-                    <span class="nav-icon">📊</span>
-                    <span class="nav-label">Dashboard</span>
-                </a>
-                <a href="#" class="nav-item" data-view="programs">
-                    <span class="nav-icon">📋</span>
-                    <span class="nav-label">Programs</span>
-                </a>
-                <a href="#" class="nav-item" data-view="vendors">
-                    <span class="nav-icon">🏢</span>
-                    <span class="nav-label">Vendors</span>
-                </a>
-                <a href="#" class="nav-item" data-view="schedules">
-                    <span class="nav-icon">📅</span>
-                    <span class="nav-label">Schedules</span>
-                </a>
-                <a href="#" class="nav-item" data-view="reports">
-                    <span class="nav-icon">📈</span>
-                    <span class="nav-label">Reports</span>
-                </a>
-                <a href="discovery.html" class="nav-item" data-view="discovery">
-                    <span class="nav-icon">🔍</span>
-                    <span class="nav-label">Discover Outings</span>
-                </a>
-                <a href="qr-generator.html" class="nav-item" data-view="qr-generator">
-                    <span class="nav-icon">📱</span>
-                    <span class="nav-label">QR Codes</span>
-                </a>
-                <a href="email-management.html" class="nav-item" data-view="email-management">
-                    <span class="nav-icon">📧</span>
-                    <span class="nav-label">Email Management</span>
-                </a>
-            </div>
-
-            <div class="sidebar-footer">
-                <div class="connection-status" id="connectionStatus">
-                    <div class="status-indicator offline"></div>
-                    <span>Disconnected</span>
-                </div>
-            </div>
+        <!-- Single Navigation Bar -->
+        <nav class="main-nav">
+            <button class="nav-btn active" data-view="today">Today's Focus</button>
+            <button class="nav-btn" data-view="schedule">Weekly Schedule</button>
+            <button class="nav-btn" data-view="houses">All Houses</button>
+            <button class="nav-btn" data-view="vendors">Vendors</button>
+            <button class="nav-btn" data-view="year-schedule">Year Planning</button>
         </nav>
 
-        <!-- Main Content Area -->
-        <main class="main-content">
-            <!-- Tabbed Navigation -->
-            <div class="tabs">
-                <button class="tab active" data-tab="overview">📊 Overview</button>
-                <button class="tab" data-tab="programs">📋 Programs</button>
-                <button class="tab" data-tab="vendors">🏢 Vendors</button>
-                <button class="tab" data-tab="schedules">📅 Schedules</button>
-                <button class="tab" data-tab="generate">⚡ Generate</button>
-            </div>
-
-            <!-- Tab Content Areas -->
-            <div id="overview" class="tab-content active">
-                <h2>System Overview</h2>
-                <div class="grid">
-                    <div class="card">
-                        <h3>📋 Programs</h3>
-                        <p id="programCount">Loading...</p>
-                        <p>Therapeutic programs available for scheduling</p>
-                    </div>
-                    <div class="card">
-                        <h3>🏢 Vendors</h3>
-                        <p id="vendorCount">Loading...</p>
-                        <p>Service providers and venues</p>
-                    </div>
-                    <div class="card">
-                        <h3>📅 Schedules</h3>
-                        <p id="scheduleCount">Loading...</p>
-                        <p>Active schedules in the system</p>
-                    </div>
+        <!-- Clean Content Area -->
+        <main class="app-content">
+            <!-- Today's View (Default) -->
+            <div id="today-view" class="view-content active">
+                <h2>� Today's Schedule</h2>
+                <div id="todayContent">
+                    <!-- Dynamic content will be loaded here -->
                 </div>
-                <button id="refreshOverviewBtn">🔄 Refresh Data</button>
             </div>
 
-            <div id="programs" class="tab-content">
-                <h2>📋 Therapeutic Programs</h2>
-                <div id="programsList"></div>
-                <button id="refreshProgramsBtn">🔄 Refresh Programs</button>
-            </div>
-
-            <div id="vendors" class="tab-content">
-                <h2>🏢 Vendors & Service Providers</h2>
-                <div id="vendorsList"></div>
-                <button id="refreshVendorsBtn">🔄 Refresh Vendors</button>
-            </div>
-
-            <div id="schedules" class="tab-content">
-                <h2>📅 Current Schedules</h2>
-                <div id="schedulesList"></div>
-                <button id="refreshSchedulesBtn">🔄 Refresh Schedules</button>
-            </div>
-
-            <div id="generate" class="tab-content">
-                <h2>⚡ Generate Schedules</h2>
-                <div class="card">
-                    <h3>Generate Weekly Schedule</h3>
-                    <p>Create a schedule for a specific week</p>
-                    <input type="date" id="weekDate" />
-                    <button id="generateWeekBtn">Generate Week</button>
-                    <div id="generateStatus"></div>
+            <!-- Weekly Schedule View -->
+            <div id="schedule-view" class="view-content">
+                <h2>📅 Weekly Schedule</h2>
+                <div class="week-selector">
+                    <button id="prevWeek">← Previous</button>
+                    <span id="currentWeek">This Week</span>
+                    <button id="nextWeek">Next →</button>
                 </div>
-                <div class="card">
-                    <h3>Generate Monthly Schedules</h3>
-                    <p>Create schedules for an entire month</p>
-                    <input type="month" id="monthDate" />
-                    <button id="generateMonthBtn">Generate Month</button>
-                    <div id="monthGenerateStatus"></div>
+                <div id="weeklySchedule" class="schedule-grid">
+                    <!-- Dynamic weekly schedule -->
+                </div>
+            </div>
+
+            <!-- All Houses View -->
+            <div id="houses-view" class="view-content">
+                <h2>🏠 All Houses</h2>
+                <div id="housesList" class="houses-grid">
+                    <!-- All 6 houses will be displayed here -->
+                </div>
+            </div>
+
+            <!-- Vendors View -->
+            <div id="vendors-view" class="view-content">
+                <h2>� Therapeutic Vendors</h2>
+                <div class="vendor-categories">
+                    <button class="category-btn active" data-category="all">All Vendors</button>
+                    <button class="category-btn" data-category="contracted">Contracted</button>
+                    <button class="category-btn" data-category="backup">Backup Activities</button>
+                </div>
+                <div id="vendorsList" class="vendors-grid">
+                    <!-- Vendors list -->
+                </div>
+            </div>
+
+            <!-- Year Planning View -->
+            <div id="year-schedule-view" class="view-content">
+                <h2>📆 Year-Long Schedule Planning</h2>
+                <div class="year-controls">
+                    <select id="yearSelect">
+                        <option value="2025">2025</option>
+                        <option value="2026">2026</option>
+                    </select>
+                    <button class="btn-secondary" id="syncGoogleBtn">🔄 Sync to Google Calendar</button>
+                </div>
+                <div id="yearCalendar" class="year-calendar">
+                    <!-- Year calendar grid -->
                 </div>
             </div>
         </main>
+
+        <!-- Quick Actions Footer -->
+        <footer class="app-footer">
+            <button class="footer-btn" id="generatePdfBtn">📄 Generate PDF</button>
+            <button class="footer-btn" id="viewIncidentsBtn">📋 Incident Reports</button>
+            <button class="footer-btn" id="settingsBtn">⚙️ Settings</button>
+        </footer>
     </div>
 
     <!-- Modal Container -->
-    <div id="modalContainer" class="modal-overlay" style="display: none;">
+    <div id="modalContainer" class="modal-overlay hidden">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title">Modal Title</h3>
-                <button class="close-modal" type="button">&times;</button>
+                <h3 class="modal-title"></h3>
+                <button class="close-modal">&times;</button>
             </div>
-            <div class="modal-body">
-                <!-- Modal content will be inserted here -->
-            </div>
+            <div class="modal-body"></div>
         </div>
     </div>
 
