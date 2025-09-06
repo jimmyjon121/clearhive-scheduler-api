@@ -409,6 +409,16 @@ class EmailService {
       </head>
       <body>
         <div class="email-container">
+          <!-- PROMINENT RED HOUSE NOTIFICATION BANNER -->
+          <div style="background: #dc2626; color: white; padding: 12px 0; text-align: center; box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3); border-top: 4px solid #991b1b; border-bottom: 4px solid #991b1b;">
+            <div style="font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">
+              ⚠️ YOU ARE SCHEDULED FOR: ${houseName} ⚠️
+            </div>
+            <div style="font-size: 14px; margin-top: 4px; font-weight: 500; opacity: 0.95;">
+              Verify this matches your assignment before proceeding
+            </div>
+          </div>
+          
           <div class="house-header">
             <h1 style="margin: 0; font-size: 28px;">🏡 ${houseName}</h1>
             <p style="margin: 5px 0 0 0; opacity: 0.9;">Therapeutic Outing Schedule</p>
