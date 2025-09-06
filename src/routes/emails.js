@@ -24,4 +24,7 @@ router.post('/reminders/daily', EmailController.sendDailyReminders);
 // Email statistics
 router.get('/statistics', EmailController.getEmailStatistics);
 
+// Email system status
+router.get('/status', EmailController.getEmailStatus);
+
 module.exports = router;

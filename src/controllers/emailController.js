@@ -6,7 +6,7 @@ class EmailController {
   static async sendScheduleNotification(req, res) {
     try {
       const { scheduleId, programId } = req.params;
-      const { includeColorCoding = true } = req.body;
+      const { includeColorCoding = true, dryRun = false } = req.body;
 
       // Get schedule data
       const schedule = await db.query(
@@ -41,11 +41,12 @@ class EmailController {
       );
 
       const result = await emailService.sendScheduleNotification(
-  program.rows[0],
-  schedule.rows[0],
-  expectations.rows.map(e => e.content),
-  facility.rows[0],
-        includeColorCoding
+        program.rows[0],
+        schedule.rows[0],
+        expectations.rows.map(e => e.content),
+        facility.rows[0],
+        includeColorCoding,
+        dryRun
       );
 
       res.json(result);
@@ -90,12 +91,16 @@ class EmailController {
       );
 
       const results = [];
-    for (const schedule of schedules.rows) {
+      
+      // Only send one email per program for all schedules on this date
+      // Instead of looping through schedules, send all schedules data at once
+      if (schedules.rows.length > 0) {
+        // Use the first schedule as the base (they should all have the same date)
         const result = await emailService.sendBulkScheduleNotifications(
-          schedule,
-      programs.rows,
-      expectations.rows.map(e => e.content),
-      facility.rows[0]
+          schedules.rows[0], // Pass the first schedule (or combine all schedules)
+          programs.rows,
+          expectations.rows.map(e => e.content),
+          facility.rows[0]
         );
         results.push(...result);
       }
@@ -344,6 +349,17 @@ class EmailController {
       res.json({ success: true, message: 'Daily reminders sent successfully' });
     } catch (error) {
       console.error('Error sending daily reminders:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Get current email system status
+  static async getEmailStatus(req, res) {
+    try {
+      const status = emailService.getEmailStatus();
+      res.json({ success: true, status });
+    } catch (error) {
+      console.error('Error fetching email status:', error);
       res.status(500).json({ error: error.message });
     }
   }
