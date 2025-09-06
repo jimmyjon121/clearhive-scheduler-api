@@ -1,0 +1,13 @@
+/************************************************************
+ * IMPORTANT: This is a plain text file ready to copy!
+ * 
+ * INSTRUCTIONS:
+ * 1. Select ALL text in this file (Ctrl+A / Cmd+A)
+ * 2. Copy it (Ctrl+C / Cmd+C)  
+ * 3. Go to Google Apps Script
+ * 4. Delete everything in the editor
+ * 5. Paste (Ctrl+V / Cmd+V)
+ * 6. Save
+ * 
+ * The actual code starts below this line:
+ ************************************************************/

@@ -22,6 +22,8 @@ class EmailService {
       // Add more houses as needed
     };
     this.reminderJobs = new Map();
+    this.recentEmailHashes = new Map(); // Track recent emails to prevent duplicates
+    this.emailRateLimiter = new Map(); // Rate limiting per recipient
   }
 
   initialize({ host, port, secure, user, pass }) {
@@ -40,7 +42,7 @@ class EmailService {
     }
   }
 
-  async sendScheduleNotification(program, scheduleData, expectations = [], facilitySettings = {}, includeColorCoding = true) {
+  async sendScheduleNotification(program, scheduleData, expectations = [], facilitySettings = {}, includeColorCoding = true, dryRun = false) {
     if (!this.transporter) {
       console.warn('Email service not configured');
       return { success: false, error: 'Email service not configured' };
@@ -73,13 +75,26 @@ class EmailService {
       expectations: expectationsForPdf
     }, facilitySettings);
 
-    const recipients = [];
-    if (program.program_coordinator_email) recipients.push(program.program_coordinator_email);
-    if (program.additional_emails) recipients.push(...program.additional_emails.split(',').map(e => e.trim()).filter(Boolean));
-
+    // Collect and deduplicate recipients
+    const recipientSet = new Set();
+    if (program.program_coordinator_email) {
+      recipientSet.add(program.program_coordinator_email.trim().toLowerCase());
+    }
+    if (program.additional_emails) {
+      program.additional_emails.split(',')
+        .map(e => e.trim().toLowerCase())
+        .filter(Boolean)
+        .forEach(email => recipientSet.add(email));
+    }
+    
+    const recipients = Array.from(recipientSet);
+    
     if (!recipients.length) {
       return { success: false, error: 'No recipients found for program' };
     }
+    
+    console.log(`[EMAIL] Preparing to send schedule notification for ${houseName} to ${recipients.length} recipient(s): ${recipients.join(', ')}`);
+    console.log(`[EMAIL] Schedule Date: ${scheduleData.schedule_date}, Facility: ${scheduleData.facility_id || program.facility_id || 1}`);
 
     const mailOptions = {
       from: facilitySettings.from_email || facilitySettings.email || 'noreply@familyfirst.org',
@@ -95,8 +110,72 @@ class EmailService {
       ]
     };
 
+    // Generate email hash for duplicate detection
+    const crypto = require('crypto');
+    const emailHash = crypto.createHash('md5')
+      .update(`${houseName}-${scheduleData.schedule_date}-${recipients.join(',')}`)
+      .digest('hex');
+    
+    // Check for duplicate email sent in the last hour
+    const lastSent = this.recentEmailHashes.get(emailHash);
+    if (lastSent && (Date.now() - lastSent) < 3600000) { // 1 hour
+      console.warn(`[EMAIL] Duplicate email detected for ${houseName} on ${scheduleData.schedule_date}. Skipping.`);
+      return { 
+        success: false, 
+        error: 'Duplicate email detected - same email was sent within the last hour',
+        isDuplicate: true 
+      };
+    }
+    
+    // Check rate limiting (max 10 emails per recipient per hour)
+    for (const recipient of recipients) {
+      const recipientKey = recipient.toLowerCase();
+      const sentTimes = this.emailRateLimiter.get(recipientKey) || [];
+      const recentSends = sentTimes.filter(time => Date.now() - time < 3600000);
+      
+      if (recentSends.length >= 10) {
+        console.warn(`[EMAIL] Rate limit exceeded for ${recipient}. ${recentSends.length} emails sent in the last hour.`);
+        return { 
+          success: false, 
+          error: `Rate limit exceeded for ${recipient}`,
+          isRateLimited: true 
+        };
+      }
+    }
+
     try {
+      if (dryRun) {
+        console.log(`[EMAIL] DRY RUN - Would send email to ${recipients.join(', ')} for ${houseName}`);
+        console.log(`[EMAIL] DRY RUN - Subject: ${mailOptions.subject}`);
+        console.log(`[EMAIL] DRY RUN - From: ${mailOptions.from}`);
+        console.log(`[EMAIL] DRY RUN - Attachment: ${mailOptions.attachments[0].filename}`);
+        
+        return { 
+          success: true, 
+          dryRun: true, 
+          wouldSendTo: recipients,
+          subject: mailOptions.subject,
+          from: mailOptions.from,
+          messageId: 'dry-run-' + Date.now()
+        };
+      }
+      
+      console.log(`[EMAIL] Sending email to ${recipients.join(', ')} for ${houseName}...`);
       const result = await this.transporter.sendMail(mailOptions);
+      
+      // Update duplicate detection hash
+      this.recentEmailHashes.set(emailHash, Date.now());
+      
+      // Update rate limiter
+      recipients.forEach(recipient => {
+        const recipientKey = recipient.toLowerCase();
+        const sentTimes = this.emailRateLimiter.get(recipientKey) || [];
+        sentTimes.push(Date.now());
+        this.emailRateLimiter.set(recipientKey, sentTimes);
+      });
+      
+      // Clean up old entries periodically
+      this.cleanupOldEntries();
 
       // Archive email
       await this.archiveEmail({
@@ -108,9 +187,10 @@ class EmailService {
         recipients
       });
 
+      console.log(`[EMAIL] Successfully sent email for ${houseName}. Message ID: ${result.messageId}`);
       return { success: true, messageId: result.messageId, archived: true };
     } catch (error) {
-      console.error('Error sending email:', error);
+      console.error(`[EMAIL] Error sending email for ${houseName}:`, error);
       return { success: false, error: error.message };
     }
   }
@@ -221,6 +301,56 @@ class EmailService {
     const mainName = houseName.split(' - ')[0].split(' ')[0];
     return this.colorScheme[mainName] || this.colorScheme[houseName] || '#667eea';
   }
+  
+  // Clean up old entries from rate limiter and duplicate tracker
+  cleanupOldEntries() {
+    const oneHourAgo = Date.now() - 3600000;
+    
+    // Clean duplicate hashes
+    for (const [hash, timestamp] of this.recentEmailHashes.entries()) {
+      if (timestamp < oneHourAgo) {
+        this.recentEmailHashes.delete(hash);
+      }
+    }
+    
+    // Clean rate limiter
+    for (const [recipient, times] of this.emailRateLimiter.entries()) {
+      const recentTimes = times.filter(time => time > oneHourAgo);
+      if (recentTimes.length === 0) {
+        this.emailRateLimiter.delete(recipient);
+      } else {
+        this.emailRateLimiter.set(recipient, recentTimes);
+      }
+    }
+  }
+  
+  // Get email sending status for monitoring
+  getEmailStatus() {
+    const status = {
+      isConfigured: !!this.transporter,
+      recentEmailsSent: this.recentEmailHashes.size,
+      rateLimitedRecipients: [],
+      automatedJobs: {
+        daily: this.reminderJobs.has('daily') ? 'active' : 'inactive',
+        weekly: this.reminderJobs.has('weekly') ? 'active' : 'inactive',
+        confirmation: this.reminderJobs.has('confirmation') ? 'active' : 'inactive'
+      }
+    };
+    
+    // Check for rate-limited recipients
+    for (const [recipient, times] of this.emailRateLimiter.entries()) {
+      const recentSends = times.filter(time => Date.now() - time < 3600000);
+      if (recentSends.length >= 8) { // Warning at 8+ emails
+        status.rateLimitedRecipients.push({
+          email: recipient,
+          recentSends: recentSends.length,
+          nextAvailable: new Date(Math.min(...recentSends) + 3600000)
+        });
+      }
+    }
+    
+    return status;
+  }
 
   async generateColorCodedEmailHTML(houseName, assignment, expectations, facilitySettings, scheduleData, houseColor, includeColorCoding) {
     const scheduleDate = new Date(scheduleData.schedule_date).toLocaleDateString('en-US', {
@@ -279,6 +409,16 @@ class EmailService {
       </head>
       <body>
         <div class="email-container">
+          <!-- PROMINENT RED HOUSE NOTIFICATION BANNER -->
+          <div style="background: #dc2626; color: white; padding: 12px 0; text-align: center; box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3); border-top: 4px solid #991b1b; border-bottom: 4px solid #991b1b;">
+            <div style="font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">
+              ⚠️ YOU ARE SCHEDULED FOR: ${houseName} ⚠️
+            </div>
+            <div style="font-size: 14px; margin-top: 4px; font-weight: 500; opacity: 0.95;">
+              Verify this matches your assignment before proceeding
+            </div>
+          </div>
+          
           <div class="house-header">
             <h1 style="margin: 0; font-size: 28px;">🏡 ${houseName}</h1>
             <p style="margin: 5px 0 0 0; opacity: 0.9;">Therapeutic Outing Schedule</p>
