@@ -2958,14 +2958,14 @@ function onOpen() {
     
     // Main Actions (most used items at the top)
     menu.addItem('📅 Generate Schedule', 'generateScheduleWithUI')
-  .addItem('📧 Send Weekly Schedule', 'sendWeeklyEmailsToDistributionLists')
+  .addItem('📧 Preview & Send Schedule', 'previewAndSendSchedule')
         .addItem('🔄 Refill This Week', 'refillThisWeekSmart')
         .addItem('🔁 Replace Cancelled Outing', 'replaceOutingUI')
         .addSeparator();
     
     // Email Management submenu
     menu.addSubMenu(ui.createMenu('📧 Email Management')
-        .addItem('📧 Send Weekly Schedule', 'sendWeeklyEmailsToDistributionLists')
+        .addItem('📧 Preview & Send Schedule', 'previewAndSendSchedule')
         .addSeparator()
         .addItem('📋 View Distribution Lists', 'checkEmailRecipients')
           .addItem('👤 Check Current Sender', 'quickSenderCheck')
@@ -7746,21 +7746,50 @@ function previewAndSendSchedule() {
       return;
     }
 
+    // Get headers to find date column
+    const headers = scheduleData[0];
+    const dateIndex = headers.findIndex(h => h.toLowerCase() === 'date');
+    
+    if (dateIndex === -1) {
+      ui.alert('Error', 'Cannot find Date column in schedule.', ui.ButtonSet.OK);
+      return;
+    }
+
     // Get upcoming week's schedule (next 7 days)
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
     const nextWeek = new Date(today.getTime() + (7 * 24 * 60 * 60 * 1000));
+    
     const upcomingOutings = scheduleData.slice(1).filter(row => {
-      if (!row[0] || row[0] === 'Date') return false;
+      if (!row[dateIndex]) return false;
       try {
-        const outingDate = new Date(row[0]);
-        return outingDate >= today && outingDate <= nextWeek;
+        const outingDate = new Date(row[dateIndex]);
+        return outingDate >= today && outingDate < nextWeek;
       } catch (e) {
         return false;
       }
     });
 
     if (upcomingOutings.length === 0) {
-      ui.alert('No Upcoming Outings', 'No outings scheduled for the next 7 days.', ui.ButtonSet.OK);
+      // Show what dates ARE available
+      const allDates = scheduleData.slice(1)
+        .map(row => row[dateIndex])
+        .filter(date => date)
+        .map(date => new Date(date))
+        .filter(date => !isNaN(date.getTime()))
+        .sort((a, b) => a - b);
+      
+      if (allDates.length > 0) {
+        const firstDate = allDates[0].toLocaleDateString();
+        const lastDate = allDates[allDates.length - 1].toLocaleDateString();
+        ui.alert('No Upcoming Outings', 
+          `No outings scheduled for the next 7 days.\n\n` +
+          `Your schedule contains outings from ${firstDate} to ${lastDate}.\n\n` +
+          `Generate a new schedule or check your date range.`,
+          ui.ButtonSet.OK);
+      } else {
+        ui.alert('No Outings', 'No valid outings found in the schedule.', ui.ButtonSet.OK);
+      }
       return;
     }
 
@@ -7794,10 +7823,16 @@ function previewAndSendSchedule() {
         <strong>${dayName}, ${dateFormatted}</strong><br>`;
 
       outingsByDate[dateStr].forEach(row => {
-        const house = row[1] || 'Unknown';
-        const vendor = row[2] || 'Unassigned';
-        const time = row[3] || '';
-        const activity = row[4] || '';
+        // Find column indexes based on headers
+        const houseIndex = headers.findIndex(h => h.toLowerCase() === 'house' || h.toLowerCase() === 'program');
+        const vendorIndex = headers.findIndex(h => h.toLowerCase() === 'vendor');
+        const timeIndex = headers.findIndex(h => h.toLowerCase() === 'time');
+        const activityIndex = headers.findIndex(h => h.toLowerCase() === 'activity' || h.toLowerCase() === 'description');
+        
+        const house = (houseIndex !== -1 ? row[houseIndex] : row[1]) || 'Unknown';
+        const vendor = (vendorIndex !== -1 ? row[vendorIndex] : row[2]) || 'Unassigned';
+        const time = (timeIndex !== -1 ? row[timeIndex] : row[3]) || '';
+        const activity = (activityIndex !== -1 ? row[activityIndex] : row[4]) || '';
 
         previewHtml += `<div style="margin: 5px 0; padding-left: 10px; color: #555;">
           • ${house} → ${vendor}${time ? ` (${time})` : ''}${activity ? ` - ${activity}` : ''}
