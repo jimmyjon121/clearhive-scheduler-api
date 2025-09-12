@@ -4265,7 +4265,7 @@ function debugOnOpen() {
     console.log('Step 3: Adding menu items...');
     menu.addItem('Test Script', 'testScript')
         .addItem('Generate Schedule', 'generateScheduleWithUI')
-        .addItem('Send Email', 'sendWeeklyScheduleEmail');
+        .addItem('Preview & Send Schedule', 'previewAndSendSchedule');
     
     console.log('Step 4: Adding menu to UI...');
     menu.addToUi();
@@ -7726,159 +7726,150 @@ Therapeutic Outings Scheduler System
   }
 }
 /**
- * Send weekly schedule email with safety checks
+ * Preview and send weekly schedule - simple version
  */
-function sendWeeklyScheduleEmail() {
+function previewAndSendSchedule() {
   const ui = SpreadsheetApp.getUi();
-  
-  // Safety check 1: Get recipients safely
-  let recipients = [];
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
   try {
-    const properties = PropertiesService.getScriptProperties();
-    const storedRecipients = properties.getProperty(CONFIG.RECIPIENTS_KEY);
-    if (storedRecipients) {
-      recipients = JSON.parse(storedRecipients);
-    }
-  } catch (error) {
-    console.log('Error loading recipients from ScriptProperties:', error);
-  }
-  
-  // Fallback to CONFIG.EMAIL_RECIPIENTS if it exists
-  if (recipients.length === 0 && typeof CONFIG.EMAIL_RECIPIENTS !== 'undefined' && CONFIG.EMAIL_RECIPIENTS && CONFIG.EMAIL_RECIPIENTS.length > 0) {
-    recipients = CONFIG.EMAIL_RECIPIENTS;
-  }
-  
-  if (recipients.length === 0) {
-    ui.alert(
-      '⚠️ No Recipients',
-      'No email recipients are set up!\n\n' +
-      'Use "Manage Email Recipients" to set up your email list first.',
-      ui.ButtonSet.OK
-    );
-    return;
-  }
-  
-  // Check sender account
-  const currentUser = Session.getActiveUser().getEmail();
-  const effectiveUser = Session.getEffectiveUser().getEmail();
-  
-  // Check if this is a connected account (Gmail showing but actually using work account)
-  const isConnectedAccount = (currentUser.includes('@gmail.com') && 
-                             currentUser.replace('@gmail.com', '') === 
-                             CONFIG.PREFERRED_SENDER_EMAIL.split('@')[0].replace('.', ''));
-  
-  const isWorkAccount = currentUser.includes('@familyfirstas.com') || isConnectedAccount;
-  const preferredSender = CONFIG.PREFERRED_SENDER_EMAIL;
-  
-  let senderWarning = '';
-  if (!isWorkAccount && currentUser !== preferredSender) {
-    senderWarning = '\n⚠️ WARNING: Sending from personal account!\n' +
-                    `Current account: ${currentUser}\n` +
-                    `Recommended: ${preferredSender}\n\n` +
-                    'Emails may go to spam folders!\n' +
-                    '────────────────────────\n\n';
-  }
-  
-  // Safety check 2: Show who will receive emails AND sender warning
-  const confirm = ui.alert(
-    '📧 Send Weekly Schedule',
-    senderWarning +
-    `This will send the weekly schedule to ${recipients.length} recipients:\n\n` +
-    recipients.slice(0, 3).join('\n') +
-    (recipients.length > 3 ? `\n...and ${recipients.length - 3} more` : '') +
-    '\n\nContinue with sending?',
-    ui.ButtonSet.YES_NO
-  );
-  
-  if (confirm !== ui.Button.YES) {
-    ui.alert('Cancelled', 'Email sending cancelled.', ui.ButtonSet.OK);
-    return;
-  }
-  
-  // Extra warning for personal accounts
-  if (!isWorkAccount && currentUser !== preferredSender) {
-    const workAccountWarning = ui.alert(
-      '⚠️ Personal Account Warning',
-      'You are about to send from a PERSONAL account!\n\n' +
-      `Sending from: ${currentUser}\n` +
-      `Should be: ${preferredSender}\n\n` +
-      'This may cause:\n' +
-      '• Emails going to spam\n' +
-      '• Delivery failures to @familyfirstas.com addresses\n' +
-      '• Recipients not receiving emails\n\n' +
-      'Options:\n' +
-      '1. Click NO to cancel and switch accounts\n' +
-      '2. Click YES to continue anyway\n\n' +
-      'Do you want to continue with personal account?',
-      ui.ButtonSet.YES_NO
-    );
-    
-    if (workAccountWarning !== ui.Button.YES) {
-      ui.alert(
-        'Cancelled - Switch Accounts', 
-        'To send from your work account:\n\n' +
-        '1. Sign out of Google\n' +
-        '2. Sign in with: ' + preferredSender + '\n' +
-        '3. Reopen this sheet\n' +
-        '4. Try sending again',
-        ui.ButtonSet.OK
-      );
+    // Get the schedule data
+    const scheduleSheet = ss.getSheetByName('SCHEDULE');
+    if (!scheduleSheet) {
+      ui.alert('No Schedule', 'No schedule sheet found. Generate a schedule first.', ui.ButtonSet.OK);
       return;
     }
-  }
-  
-  // Safety check 3: Check for recent sends (prevent double-sending)
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let logSheet = ss.getSheetByName('Email Log');
-  if (logSheet) {
-    const data = logSheet.getDataRange().getValues();
-    const logs = data.slice(1); // Skip header
-    const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - (60 * 60 * 1000));
-    
-    // Check if any emails were sent in the last hour
-    const recentSends = logs.filter(log => {
-      const logDate = new Date(log[0]);
-      return logDate > oneHourAgo && log[2] === 'SUCCESS';
-    });
-    
-    if (recentSends.length > 0) {
-      const lastSend = new Date(Math.max(...recentSends.map(log => new Date(log[0]))));
-      const doubleCheck = ui.alert(
-        '⚠️ Recent Email Detected',
-        `Emails were sent recently at ${lastSend.toLocaleTimeString()}.\n\n` +
-        'Are you sure you want to send again?\n\n' +
-        '(This helps prevent accidental duplicate emails)',
-        ui.ButtonSet.YES_NO
-      );
-      
-      if (doubleCheck !== ui.Button.YES) {
-        ui.alert('Cancelled', 'Email sending cancelled to prevent duplicates.', ui.ButtonSet.OK);
-        return;
-      }
+
+    const scheduleData = scheduleSheet.getDataRange().getValues();
+    if (scheduleData.length < 2) {
+      ui.alert('Empty Schedule', 'Schedule is empty. Generate some outings first.', ui.ButtonSet.OK);
+      return;
     }
+
+    // Get upcoming week's schedule (next 7 days)
+    const today = new Date();
+    const nextWeek = new Date(today.getTime() + (7 * 24 * 60 * 60 * 1000));
+    const upcomingOutings = scheduleData.slice(1).filter(row => {
+      if (!row[0] || row[0] === 'Date') return false;
+      try {
+        const outingDate = new Date(row[0]);
+        return outingDate >= today && outingDate <= nextWeek;
+      } catch (e) {
+        return false;
+      }
+    });
+
+    if (upcomingOutings.length === 0) {
+      ui.alert('No Upcoming Outings', 'No outings scheduled for the next 7 days.', ui.ButtonSet.OK);
+      return;
+    }
+
+    // Create preview HTML
+    let previewHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px;">
+        <h2 style="color: #2c3e50; margin-bottom: 20px;">📅 Upcoming Week Preview</h2>
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+          <strong>This week's schedule (${upcomingOutings.length} outings):</strong>
+        </div>
+
+        <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px; margin-bottom: 20px;">`;
+
+    // Group by date
+    const outingsByDate = {};
+    upcomingOutings.forEach(row => {
+      const date = row[0];
+      if (!outingsByDate[date]) {
+        outingsByDate[date] = [];
+      }
+      outingsByDate[date].push(row);
+    });
+
+    // Sort dates and display
+    Object.keys(outingsByDate).sort((a, b) => new Date(a) - new Date(b)).forEach(dateStr => {
+      const date = new Date(dateStr);
+      const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+      const dateFormatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      previewHtml += `<div style="margin-bottom: 15px; padding: 10px; background: white; border-radius: 5px; border-left: 4px solid #3498db;">
+        <strong>${dayName}, ${dateFormatted}</strong><br>`;
+
+      outingsByDate[dateStr].forEach(row => {
+        const house = row[1] || 'Unknown';
+        const vendor = row[2] || 'Unassigned';
+        const time = row[3] || '';
+        const activity = row[4] || '';
+
+        previewHtml += `<div style="margin: 5px 0; padding-left: 10px; color: #555;">
+          • ${house} → ${vendor}${time ? ` (${time})` : ''}${activity ? ` - ${activity}` : ''}
+        </div>`;
+      });
+
+      previewHtml += `</div>`;
+    });
+
+    previewHtml += `
+        </div>
+
+        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 15px; margin-bottom: 20px;">
+          <strong>Ready to send?</strong><br>
+          This will email the schedule to all configured recipients.
+        </div>
+
+        <div style="text-align: center;">
+          <button onclick="google.script.host.close()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 5px; margin-right: 10px; cursor: pointer;">Cancel</button>
+          <button onclick="google.script.run.sendScheduleNow(); google.script.host.close();" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Send Schedule</button>
+        </div>
+      </div>`;
+
+    // Show preview dialog
+    const htmlOutput = HtmlService
+      .createHtmlOutput(previewHtml)
+      .setWidth(650)
+      .setHeight(500);
+
+    ui.showModalDialog(htmlOutput, 'Preview & Send Schedule');
+
+  } catch (error) {
+    ui.alert('Error', `Failed to preview schedule: ${error.message}`, ui.ButtonSet.OK);
   }
-  
+}
+
+/**
+ * Actually send the schedule (called from preview dialog)
+ */
+function sendScheduleNow() {
+  const ui = SpreadsheetApp.getUi();
+
   try {
-    ui.alert('Sending...', 'Sending emails now. Please wait...', ui.ButtonSet.OK);
-    
+    // Get recipients
+    let recipients = [];
+    try {
+      const properties = PropertiesService.getScriptProperties();
+      const storedRecipients = properties.getProperty(CONFIG.RECIPIENTS_KEY);
+      if (storedRecipients) {
+        recipients = JSON.parse(storedRecipients);
+      }
+    } catch (error) {
+      console.log('Error loading recipients:', error);
+    }
+
+    if (recipients.length === 0) {
+      ui.alert('No Recipients', 'No email recipients configured. Use "Manage Email Recipients" first.', ui.ButtonSet.OK);
+      return;
+    }
+
+    // Send the email
     const emailScheduler = new EmailScheduler();
     const result = emailScheduler.generateAndEmail();
-    
+
     if (result.success) {
-      ui.alert(
-        '✅ Email Sent Successfully',
-        `Schedule sent to ${result.recipientCount} recipients.\n\n` +
-        `✅ Success: ${result.successCount}\n` +
-        `❌ Failed: ${result.failedCount}\n\n` +
-        'Check "View Email Report" for details.',
-        ui.ButtonSet.OK
-      );
+      ui.alert('Sent!', `Schedule sent to ${result.recipientCount} recipients successfully.`, ui.ButtonSet.OK);
     } else {
       throw new Error(result.error);
     }
+
   } catch (error) {
-    handleError(error, 'Email Schedule');
+    ui.alert('Send Failed', `Error sending schedule: ${error.message}`, ui.ButtonSet.OK);
   }
 }
 
@@ -8194,7 +8185,7 @@ function processManualEmailChoice(emailType, weekDate) {
     
     if (emailType === 'full') {
       // Send full schedule to everyone
-      sendWeeklyScheduleEmail();
+      previewAndSendSchedule();
     } else if (emailType === 'dual') {
       // Send dual emails
       sendDualWeeklyEmails();
@@ -14692,7 +14683,7 @@ function showColorAlignmentGuide() {
  */
 function showAutomationSettings() {
   const triggers = ScriptApp.getProjectTriggers();
-  const mondayTrigger = triggers.find(t => t.getHandlerFunction() === 'sendWeeklyScheduleEmail');
+  const mondayTrigger = triggers.find(t => t.getHandlerFunction() === 'previewAndSendSchedule');
   
   // Get recipient count safely
   let recipientCount = 0;
@@ -14718,7 +14709,7 @@ function showAutomationSettings() {
     statusMessage = `✅ ACTIVE - Emails will be sent automatically every Monday at 8:00 AM\n\n`;
     statusMessage += `📧 Recipients: ${recipientCount} configured\n`;
     statusMessage += `⏰ Next trigger: Monday at 8:00 AM\n`;
-    statusMessage += `🔄 Function: sendWeeklyScheduleEmail\n\n`;
+    statusMessage += `🔄 Function: previewAndSendSchedule\n\n`;
     statusMessage += `The system will automatically send the weekly therapeutic outings schedule to all configured recipients every Monday morning.`;
   } else {
     statusMessage = `❌ NOT CONFIGURED - No automatic email reminders set up\n\n`;
@@ -15076,7 +15067,7 @@ function setupEnhancedTrigger() {
     // Remove existing triggers
     const triggers = ScriptApp.getProjectTriggers();
     triggers.forEach(trigger => {
-      if (trigger.getHandlerFunction() === 'sendWeeklyScheduleEmail' ||
+      if (trigger.getHandlerFunction() === 'previewAndSendSchedule' ||
           trigger.getHandlerFunction() === 'emailMondayPdfEnhanced' ||
           trigger.getHandlerFunction() === 'emailMondayPdf') {
         ScriptApp.deleteTrigger(trigger);
@@ -15084,7 +15075,7 @@ function setupEnhancedTrigger() {
     });
     
     // Create new trigger for Monday at 8:00 AM
-    const trigger = ScriptApp.newTrigger('sendWeeklyScheduleEmail')
+    const trigger = ScriptApp.newTrigger('previewAndSendSchedule')
       .timeBased()
       .onWeekDay(ScriptApp.WeekDay.MONDAY)
       .atHour(8)
@@ -15114,7 +15105,7 @@ function setupEnhancedTrigger() {
     
     // Log the automation setup
     auditLog('AUTOMATION_ENABLED', {
-      function: 'sendWeeklyScheduleEmail',
+      function: 'previewAndSendSchedule',
       schedule: 'Monday 8:00 AM',
       recipients: recipients,
       triggerId: trigger.getUniqueId()
@@ -16337,7 +16328,7 @@ function runSystemHealthCheck() {
     // Check 6: Triggers
     const triggers = ScriptApp.getProjectTriggers();
     const weeklyTriggers = triggers.filter(t => 
-      t.getHandlerFunction() === 'sendWeeklyScheduleEmail' && 
+      t.getHandlerFunction() === 'previewAndSendSchedule' && 
       t.getEventType() === ScriptApp.EventType.CLOCK
     );
     
