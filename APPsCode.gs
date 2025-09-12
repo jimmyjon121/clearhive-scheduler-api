@@ -7746,7 +7746,7 @@ function previewAndSendSchedule() {
       return;
     }
 
-    // Get headers to find date column
+    // Get headers to find columns
     const headers = scheduleData[0];
     const dateIndex = headers.findIndex(h => h.toLowerCase() === 'date');
     
@@ -7755,112 +7755,273 @@ function previewAndSendSchedule() {
       return;
     }
 
-    // Get upcoming week's schedule (next 7 days)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Start of today
-    const nextWeek = new Date(today.getTime() + (7 * 24 * 60 * 60 * 1000));
-    
-    const upcomingOutings = scheduleData.slice(1).filter(row => {
-      if (!row[dateIndex]) return false;
-      try {
-        const outingDate = new Date(row[dateIndex]);
-        return outingDate >= today && outingDate < nextWeek;
-      } catch (e) {
-        return false;
-      }
-    });
+    // Find all available weeks in the schedule
+    const allDates = scheduleData.slice(1)
+      .map(row => row[dateIndex])
+      .filter(date => date)
+      .map(date => new Date(date))
+      .filter(date => !isNaN(date.getTime()));
 
-    if (upcomingOutings.length === 0) {
-      // Show what dates ARE available
-      const allDates = scheduleData.slice(1)
-        .map(row => row[dateIndex])
-        .filter(date => date)
-        .map(date => new Date(date))
-        .filter(date => !isNaN(date.getTime()))
-        .sort((a, b) => a - b);
-      
-      if (allDates.length > 0) {
-        const firstDate = allDates[0].toLocaleDateString();
-        const lastDate = allDates[allDates.length - 1].toLocaleDateString();
-        ui.alert('No Upcoming Outings', 
-          `No outings scheduled for the next 7 days.\n\n` +
-          `Your schedule contains outings from ${firstDate} to ${lastDate}.\n\n` +
-          `Generate a new schedule or check your date range.`,
-          ui.ButtonSet.OK);
-      } else {
-        ui.alert('No Outings', 'No valid outings found in the schedule.', ui.ButtonSet.OK);
-      }
+    if (allDates.length === 0) {
+      ui.alert('No Dates', 'No valid dates found in schedule.', ui.ButtonSet.OK);
       return;
     }
 
-    // Create preview HTML
-    let previewHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px;">
-        <h2 style="color: #2c3e50; margin-bottom: 20px;">📅 Upcoming Week Preview</h2>
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-          <strong>This week's schedule (${upcomingOutings.length} outings):</strong>
-        </div>
-
-        <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px; margin-bottom: 20px;">`;
-
-    // Group by date
-    const outingsByDate = {};
-    upcomingOutings.forEach(row => {
-      const date = row[0];
-      if (!outingsByDate[date]) {
-        outingsByDate[date] = [];
+    // Group dates by week (Monday to Sunday)
+    const weeks = {};
+    allDates.forEach(date => {
+      const monday = new Date(date);
+      const day = monday.getDay();
+      const diff = monday.getDate() - day + (day === 0 ? -6 : 1);
+      monday.setDate(diff);
+      monday.setHours(0, 0, 0, 0);
+      
+      const weekKey = monday.toISOString().split('T')[0];
+      if (!weeks[weekKey]) {
+        weeks[weekKey] = {
+          start: new Date(monday),
+          end: new Date(monday.getTime() + (6 * 24 * 60 * 60 * 1000)),
+          dates: []
+        };
       }
-      outingsByDate[date].push(row);
+      weeks[weekKey].dates.push(date);
     });
 
-    // Sort dates and display
-    Object.keys(outingsByDate).sort((a, b) => new Date(a) - new Date(b)).forEach(dateStr => {
-      const date = new Date(dateStr);
-      const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-      const dateFormatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-      previewHtml += `<div style="margin-bottom: 15px; padding: 10px; background: white; border-radius: 5px; border-left: 4px solid #3498db;">
-        <strong>${dayName}, ${dateFormatted}</strong><br>`;
-
-      outingsByDate[dateStr].forEach(row => {
-        // Find column indexes based on headers
-        const houseIndex = headers.findIndex(h => h.toLowerCase() === 'house' || h.toLowerCase() === 'program');
-        const vendorIndex = headers.findIndex(h => h.toLowerCase() === 'vendor');
-        const timeIndex = headers.findIndex(h => h.toLowerCase() === 'time');
-        const activityIndex = headers.findIndex(h => h.toLowerCase() === 'activity' || h.toLowerCase() === 'description');
+    // Sort weeks by date
+    const sortedWeeks = Object.entries(weeks).sort((a, b) => a[1].start - b[1].start);
+    // Create preview HTML with week selector
+    let previewHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { 
+            font-family: Arial, sans-serif; 
+            margin: 0;
+            padding: 20px;
+          }
+          h2 { 
+            color: #2c3e50; 
+            margin-bottom: 20px;
+          }
+          .week-selector {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+          }
+          .week-selector select {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+          }
+          .schedule-preview {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 20px;
+            background: #f9f9f9;
+          }
+          .date-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+          .date-header {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 18px;
+          }
+          .outing {
+            margin: 8px 0;
+            padding: 10px;
+            background: #f0f7ff;
+            border-radius: 4px;
+            border-left: 3px solid #1976d2;
+          }
+          .house-name {
+            font-weight: bold;
+            color: #1565c0;
+          }
+          .vendor-name {
+            font-weight: bold;
+            color: #2e7d32;
+          }
+          .time {
+            color: #666;
+            font-style: italic;
+          }
+          .summary {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+          }
+          .buttons {
+            text-align: center;
+            margin-top: 20px;
+          }
+          button {
+            padding: 12px 30px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+          }
+          .send-btn {
+            background: #28a745;
+            color: white;
+          }
+          .send-btn:hover {
+            background: #218838;
+          }
+          .cancel-btn {
+            background: #6c757d;
+            color: white;
+          }
+          .cancel-btn:hover {
+            background: #5a6268;
+          }
+          .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+          }
+        </style>
+      </head>
+      <body>
+        <h2>📅 Preview & Send Weekly Schedule</h2>
         
-        const house = (houseIndex !== -1 ? row[houseIndex] : row[1]) || 'Unknown';
-        const vendor = (vendorIndex !== -1 ? row[vendorIndex] : row[2]) || 'Unassigned';
-        const time = (timeIndex !== -1 ? row[timeIndex] : row[3]) || '';
-        const activity = (activityIndex !== -1 ? row[activityIndex] : row[4]) || '';
-
-        previewHtml += `<div style="margin: 5px 0; padding-left: 10px; color: #555;">
-          • ${house} → ${vendor}${time ? ` (${time})` : ''}${activity ? ` - ${activity}` : ''}
-        </div>`;
-      });
-
-      previewHtml += `</div>`;
-    });
-
-    previewHtml += `
+        <div class="week-selector">
+          <label for="weekSelect" style="display: block; margin-bottom: 8px; font-weight: bold;">Select Week to Send:</label>
+          <select id="weekSelect" onchange="updatePreview()">
+            ${sortedWeeks.map(([weekKey, week], index) => {
+              const weekStart = week.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              const weekEnd = week.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              const isCurrentWeek = new Date() >= week.start && new Date() <= week.end;
+              return `<option value="${weekKey}" ${index === 0 ? 'selected' : ''}>
+                ${weekStart} - ${weekEnd} ${isCurrentWeek ? '(Current Week)' : ''}
+              </option>`;
+            }).join('')}
+          </select>
         </div>
-
-        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 15px; margin-bottom: 20px;">
-          <strong>Ready to send?</strong><br>
-          This will email the schedule to all configured recipients.
+        
+        <div id="scheduleContent">
+          <div class="loading">Loading schedule...</div>
         </div>
-
-        <div style="text-align: center;">
-          <button onclick="google.script.host.close()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 5px; margin-right: 10px; cursor: pointer;">Cancel</button>
-          <button onclick="google.script.run.sendScheduleNow(); google.script.host.close();" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Send Schedule</button>
+        
+        <div class="buttons">
+          <button class="cancel-btn" onclick="google.script.host.close()">Cancel</button>
+          <button class="send-btn" onclick="sendSelectedWeek()">Send This Week's Schedule</button>
         </div>
-      </div>`;
+        
+        <script>
+          // Store all schedule data
+          const scheduleData = ${JSON.stringify(scheduleData)};
+          const headers = ${JSON.stringify(headers)};
+          const dateIndex = ${dateIndex};
+          
+          // Find column indexes
+          const houseIndex = headers.findIndex(h => h.toLowerCase() === 'house' || h.toLowerCase() === 'program');
+          const vendorIndex = headers.findIndex(h => h.toLowerCase() === 'vendor');
+          const timeIndex = headers.findIndex(h => h.toLowerCase() === 'time');
+          const activityIndex = headers.findIndex(h => h.toLowerCase() === 'activity' || h.toLowerCase() === 'description');
+          
+          function updatePreview() {
+            const weekSelect = document.getElementById('weekSelect');
+            const selectedWeek = weekSelect.value;
+            const weekStart = new Date(selectedWeek);
+            const weekEnd = new Date(weekStart.getTime() + (6 * 24 * 60 * 60 * 1000));
+            
+            // Filter outings for selected week
+            const weekOutings = scheduleData.slice(1).filter(row => {
+              if (!row[dateIndex]) return false;
+              const outingDate = new Date(row[dateIndex]);
+              return outingDate >= weekStart && outingDate <= weekEnd;
+            });
+            
+            // Group by date
+            const outingsByDate = {};
+            weekOutings.forEach(row => {
+              const dateStr = new Date(row[dateIndex]).toDateString();
+              if (!outingsByDate[dateStr]) {
+                outingsByDate[dateStr] = [];
+              }
+              outingsByDate[dateStr].push(row);
+            });
+            
+            // Build preview HTML
+            let previewContent = '<div class="summary"><strong>' + weekOutings.length + ' outings scheduled this week</strong></div>';
+            previewContent += '<div class="schedule-preview">';
+            
+            // Sort dates and display
+            Object.keys(outingsByDate).sort((a, b) => new Date(a) - new Date(b)).forEach(dateStr => {
+              const date = new Date(dateStr);
+              const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+              const dateFormatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              
+              previewContent += '<div class="date-group">';
+              previewContent += '<div class="date-header">' + dayName + ', ' + dateFormatted + '</div>';
+              
+              outingsByDate[dateStr].forEach(row => {
+                const house = (houseIndex !== -1 ? row[houseIndex] : row[1]) || 'Unknown';
+                const vendor = (vendorIndex !== -1 ? row[vendorIndex] : row[2]) || 'Unassigned';
+                const time = (timeIndex !== -1 ? row[timeIndex] : row[3]) || '';
+                const activity = (activityIndex !== -1 ? row[activityIndex] : row[4]) || '';
+                
+                previewContent += '<div class="outing">';
+                previewContent += '<span class="house-name">' + house + '</span>';
+                previewContent += ' → ';
+                previewContent += '<span class="vendor-name">' + vendor + '</span>';
+                if (time) previewContent += ' <span class="time">(' + time + ')</span>';
+                if (activity) previewContent += '<br><small>' + activity + '</small>';
+                previewContent += '</div>';
+              });
+              
+              previewContent += '</div>';
+            });
+            
+            previewContent += '</div>';
+            
+            document.getElementById('scheduleContent').innerHTML = previewContent;
+          }
+          
+          function sendSelectedWeek() {
+            const weekSelect = document.getElementById('weekSelect');
+            const selectedWeek = weekSelect.value;
+            document.getElementById('scheduleContent').innerHTML = '<div class="loading">Sending schedule...</div>';
+            google.script.run
+              .withSuccessHandler(() => google.script.host.close())
+              .withFailureHandler(error => {
+                alert('Error sending schedule: ' + error.message);
+                updatePreview();
+              })
+              .sendScheduleForWeek(selectedWeek);
+          }
+          
+          // Initial load
+          updatePreview();
+        </script>
+      </body>
+      </html>`;
 
     // Show preview dialog
     const htmlOutput = HtmlService
       .createHtmlOutput(previewHtml)
-      .setWidth(650)
-      .setHeight(500);
+      .setWidth(700)
+      .setHeight(600);
 
     ui.showModalDialog(htmlOutput, 'Preview & Send Schedule');
 
@@ -7905,6 +8066,56 @@ function sendScheduleNow() {
 
   } catch (error) {
     ui.alert('Send Failed', `Error sending schedule: ${error.message}`, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Send schedule for a specific week (called from preview dialog)
+ */
+function sendScheduleForWeek(weekStartDate) {
+  const ui = SpreadsheetApp.getUi();
+
+  try {
+    // Get recipients
+    let recipients = [];
+    try {
+      const properties = PropertiesService.getScriptProperties();
+      const storedRecipients = properties.getProperty(CONFIG.RECIPIENTS_KEY);
+      if (storedRecipients) {
+        recipients = JSON.parse(storedRecipients);
+      }
+    } catch (error) {
+      console.log('Error loading recipients:', error);
+    }
+
+    if (recipients.length === 0) {
+      throw new Error('No email recipients configured. Use "Manage Email Recipients" first.');
+    }
+
+    // Store the selected week temporarily for the email functions to use
+    PropertiesService.getScriptProperties().setProperty('TEMP_EMAIL_WEEK', weekStartDate);
+
+    // Send the email using the EmailScheduler
+    const emailScheduler = new EmailScheduler();
+    const result = emailScheduler.generateAndEmailForWeek(weekStartDate);
+
+    // Clear the temporary week
+    PropertiesService.getScriptProperties().deleteProperty('TEMP_EMAIL_WEEK');
+
+    if (result.success) {
+      // Success is handled by the dialog closing
+      return true;
+    } else {
+      throw new Error(result.error);
+    }
+
+  } catch (error) {
+    // Clear temp property on error too
+    try {
+      PropertiesService.getScriptProperties().deleteProperty('TEMP_EMAIL_WEEK');
+    } catch (e) {}
+    
+    throw error;
   }
 }
 
@@ -8415,6 +8626,33 @@ class EmailScheduler {
     const tableData = this.buildScheduleTable();
     const { subject, plainBody, htmlBody } = this.buildEmailContent(weekData, tableData);
 
+    return this._sendEmails(subject, plainBody, htmlBody, weekData);
+  }
+
+  /**
+   * Generate and send email for a specific week
+   */
+  generateAndEmailForWeek(weekStartDate) {
+    // Get schedule data for specific week
+    const weekStart = new Date(weekStartDate);
+    const weekEnd = new Date(weekStart.getTime() + (6 * 24 * 60 * 60 * 1000));
+    
+    const weekData = this.getWeekData(weekStart, weekEnd);
+    if (!weekData) {
+      throw new Error('No schedule found for selected week.');
+    }
+
+    const tableData = this.buildScheduleTableForWeek(weekStart, weekEnd);
+    const { subject, plainBody, htmlBody } = this.buildEmailContent(weekData, tableData);
+
+    return this._sendEmails(subject, plainBody, htmlBody, weekData);
+  }
+
+  /**
+   * Common email sending logic
+   */
+  _sendEmails(subject, plainBody, htmlBody, weekData) {
+
     // Get email recipients from Script Properties
     const properties = PropertiesService.getScriptProperties();
     const storedRecipients = properties.getProperty(CONFIG.RECIPIENTS_KEY);
@@ -8715,23 +8953,49 @@ class EmailScheduler {
   /**
    * Get schedule data for a specific week
    */
-  getWeekData(targetDate) {
+  getWeekData(weekStart, weekEnd) {
+    // If only one parameter, it's the old single date method
+    if (!weekEnd) {
+      const targetDate = weekStart;
+      const schedSheet = this.dataManager.getSheet('SCHEDULE');
+      const data = schedSheet.getDataRange().getValues();
+      
+      for (let i = 1; i < data.length; i++) {
+        const date = new Date(data[i][0]);
+        if (date.toISOString().split('T')[0] === targetDate.toISOString().split('T')[0]) {
+          return {
+            headers: data[0],
+            row: data[i],
+            dateStr: Utilities.formatDate(date, CONFIG.DEFAULT_TIMEZONE, 'MM/dd/yyyy'),
+            date: date
+          };
+        }
+      }
+      
+      return null;
+    }
+    
+    // New method: get data for date range
     const schedSheet = this.dataManager.getSheet('SCHEDULE');
     const data = schedSheet.getDataRange().getValues();
+    const weekRows = [];
     
     for (let i = 1; i < data.length; i++) {
       const date = new Date(data[i][0]);
-      if (date.toISOString().split('T')[0] === targetDate.toISOString().split('T')[0]) {
-        return {
-          headers: data[0],
-          row: data[i],
-          dateStr: Utilities.formatDate(date, CONFIG.DEFAULT_TIMEZONE, 'MM/dd/yyyy'),
-          date: date
-        };
+      if (date >= weekStart && date <= weekEnd) {
+        weekRows.push(data[i]);
       }
     }
     
-    return null;
+    if (weekRows.length === 0) return null;
+    
+    return {
+      headers: data[0],
+      rows: weekRows,
+      dateStr: Utilities.formatDate(weekStart, CONFIG.DEFAULT_TIMEZONE, 'MM/dd/yyyy'),
+      startDate: weekStart,
+      endDate: weekEnd
+    };
   }
   
   // PDF-related methods removed - now using direct email
@@ -8820,6 +9084,17 @@ class EmailScheduler {
     const weekData = this.getThisWeekData();
     if (!weekData) {
       throw new Error('No schedule data available to build table');
+    }
+    return this.createScheduleTableHtml(weekData);
+  }
+  
+  /**
+   * Build schedule table for a specific week
+   */
+  buildScheduleTableForWeek(weekStart, weekEnd) {
+    const weekData = this.getWeekData(weekStart, weekEnd);
+    if (!weekData) {
+      throw new Error('No schedule data available for selected week');
     }
     return this.createScheduleTableHtml(weekData);
   }
@@ -9122,9 +9397,12 @@ class EmailScheduler {
    */
   createScheduleTableHtml(weekData) {
     // Validate weekData structure
-    if (!weekData || !weekData.headers || !weekData.row) {
+    if (!weekData || !weekData.headers || (!weekData.row && !weekData.rows)) {
       return '<p style="color: #d93025;">No schedule data available</p>';
     }
+    
+    // Handle both single row and multiple rows
+    const rows = weekData.rows || [weekData.row];
     
     // Get vendor data for contact information
     const vendors = this.dataManager.getVendors();
@@ -9139,20 +9417,36 @@ class EmailScheduler {
     const houseColumns = weekData.headers.slice(startIndex, endIndex);
     
     let html = `
-      <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-        <tr>
-          <th style="background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%); color: white; padding: 16px; text-align: left; font-weight: 600; font-size: 14px;">House</th>
-          <th style="background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%); color: white; padding: 16px; text-align: left; font-weight: 600; font-size: 14px;">Vendor</th>
-          <th style="background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%); color: white; padding: 16px; text-align: left; font-weight: 600; font-size: 14px;">Time</th>
-          <th style="background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%); color: white; padding: 16px; text-align: left; font-weight: 600; font-size: 14px;">Contact Info</th>
-        </tr>`;
+      <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">`;
     
-    // Process each house
+    // Process each row (day) in the week
     let hasScheduledOuting = false;
-    for (let i = 0; i < houseColumns.length; i++) {
-      const house = houseColumns[i];
-      const dataIndex = startIndex + i;
-      const cellData = weekData.row[dataIndex] || '';
+    
+    for (const row of rows) {
+      const date = new Date(row[dateIndex]);
+      const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+      const dateFormatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      
+      // Add date header row
+      html += `
+        <tr>
+          <td colspan="4" style="background: #2c3e50; color: white; padding: 12px 16px; font-weight: 600; font-size: 16px;">
+            ${dayName}, ${dateFormatted}
+          </td>
+        </tr>
+        <tr>
+          <th style="background: #ecf0f1; color: #2c3e50; padding: 10px 16px; text-align: left; font-weight: 600; font-size: 13px;">House</th>
+          <th style="background: #ecf0f1; color: #2c3e50; padding: 10px 16px; text-align: left; font-weight: 600; font-size: 13px;">Vendor</th>
+          <th style="background: #ecf0f1; color: #2c3e50; padding: 10px 16px; text-align: left; font-weight: 600; font-size: 13px;">Time</th>
+          <th style="background: #ecf0f1; color: #2c3e50; padding: 10px 16px; text-align: left; font-weight: 600; font-size: 13px;">Contact Info</th>
+        </tr>`;
+      
+      // Process each house for this day
+      let dayHasOutings = false;
+      for (let i = 0; i < houseColumns.length; i++) {
+        const house = houseColumns[i];
+        const dataIndex = startIndex + i;
+        const cellData = row[dataIndex] || '';
       
       // Skip empty house names
       if (!house || house.trim() === '') continue;
@@ -9181,35 +9475,39 @@ class EmailScheduler {
         
         html += `
           <tr>
-            <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f0; font-weight: 700; background-color: ${houseHeaderColor}; color: ${houseColor};">${house}</td>
-            <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f0; background-color: ${bgColor}; font-weight: 500; color: #2c3e50;">${vendor}</td>
-            <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f0; color: #34495e;">${time}</td>
-            <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f0; font-size: 12px; color: #7f8c8d;">${contactInfo}</td>
+            <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; font-weight: 600; background-color: ${houseHeaderColor}; color: ${houseColor};">${house}</td>
+            <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; background-color: ${bgColor}; font-weight: 500; color: #2c3e50;">${vendor}</td>
+            <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; color: #34495e;">${time}</td>
+            <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; font-size: 12px; color: #7f8c8d;">${contactInfo}</td>
           </tr>`;
         hasScheduledOuting = true;
-      } else {
-        // Get house colors for unassigned rows too
-        const dataManager = new DataManager(SpreadsheetApp.getActiveSpreadsheet());
-        const houseHeaderColor = dataManager.getHouseHeaderColor(house);
-        const houseColor = dataManager.getHouseColor(house);
-        
-        html += `
-          <tr>
-            <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f0; font-weight: 700; background-color: ${houseHeaderColor}; color: ${houseColor};">${house}</td>
-            <td colspan="3" style="padding: 14px 16px; border-bottom: 1px solid #f0f0f0; color: #95a5a6; font-style: italic;">No outing scheduled</td>
-          </tr>`;
+        dayHasOutings = true;
       }
     }
     
-    // If no houses found or no outings
-    if (!hasScheduledOuting || houseColumns.length === 0) {
+    // If no outings for this day, add a note
+    if (!dayHasOutings) {
       html += `
         <tr>
-          <td colspan="4" style="padding: 20px; text-align: center; color: #7f8c8d; font-style: italic;">
-            No therapeutic outings scheduled for this week
+          <td colspan="4" style="padding: 12px 16px; text-align: center; color: #95a5a6; font-style: italic; border-bottom: 1px solid #f0f0f0;">
+            No outings scheduled for this day
           </td>
         </tr>`;
     }
+    
+    // Add spacer row between days
+    html += `<tr><td colspan="4" style="padding: 4px; background: #f8f9fa;"></td></tr>`;
+  }
+  
+  // If no outings at all
+  if (!hasScheduledOuting) {
+    html += `
+      <tr>
+        <td colspan="4" style="padding: 30px; text-align: center; color: #7f8c8d; font-style: italic;">
+          No therapeutic outings scheduled for this week
+        </td>
+      </tr>`;
+  }
     
     html += '</table>';
     
