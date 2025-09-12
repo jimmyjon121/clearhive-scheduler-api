@@ -1,13 +1,24 @@
 /************************************************************
- * Family First Therapeutic Outings Scheduler - Enterprise Edition v4.3
+ * Family First Therapeutic Outings Scheduler - Enterprise Edition v5.0
  * A ClearHive Health Product
  * 
  * @developer ClearHive Health
  * @client Family First Adolescent Services
- * @version 4.3.0
- * @lastModified 2025-09-05
+ * @version 5.0.0
+ * @lastModified 2025-09-12
  * 
- * RECENT IMPROVEMENTS (v4.1 - September 2025):
+ * MAJOR UPDATE (v5.0 - September 2025):
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * ✅ Simplified email system - 3 distribution lists only
+ * ✅ House-specific PDF generation with professional formatting
+ * ✅ One-click PDF distribution to all programs
+ * ✅ Streamlined spreadsheet structure (5 essential tabs)
+ * ✅ Enhanced PDF organization with date-stamped folders
+ * ✅ Removed unnecessary calendar integration complexity
+ * ✅ Added "Where Are My PDFs?" helper function
+ * ✅ Simplified recipient management
+ * 
+ * RECENT IMPROVEMENTS (v4.1-4.3):
  * - Dual email system for PCs (full) and BHTs (house-specific)
  * - Enhanced CONFIG with 32 core rotation vendors
  * - House color mapping for consistent visual identification
@@ -17,24 +28,24 @@
  * - Performance caching layer (90% faster data loads)
  * - Exponential backoff retry for reliability
  * - Batch email processing for 200+ recipients
- * - Enhanced data validation accessible from menu
  * 
  * CORE FEATURES:
- * - Smart vendor rotation with 3-week minimum spacing
+ * - Smart vendor rotation with complex agreement management
  * - Real-time conflict detection and resolution
- * - Vendor calendar synchronization
+ * - Professional PDF schedules for each house/program
  * - Audit logging with complete activity tracking
  * - HTML email delivery with color-coded schedules
- * - PDF generation for vendor schedules
- * - Distribution list support for 200+ recipients
+ * - Simplified distribution to 3 main lists
+ * - Automatic PDF organization by date
  * 
  * COMPLIANCE: HIPAA-safe, no PHI stored or transmitted
  *************************************************************/
 
 /**
- * Send dual weekly emails with smart recipient management
+ * Send weekly emails to the 3 distribution lists with week selection
+ * Allows choosing which week's schedule to send
  */
-function sendDualWeeklyEmails() {
+function sendWeeklyEmailsToDistributionLists() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const scheduleSheet = ss.getSheetByName('SCHEDULE');
@@ -44,18 +55,382 @@ function sendDualWeeklyEmails() {
     return;
   }
   
+  // Show dialog to select week and confirm recipients
+  showEmailSelectionDialog();
+}
+
+/**
+ * Show dialog for selecting week and confirming recipients
+ */
+function showEmailSelectionDialog() {
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { 
+          font-family: 'Segoe UI', Arial, sans-serif; 
+          padding: 20px;
+          background: #f5f5f5;
+        }
+        h2 { 
+          color: #1976d2; 
+          margin-bottom: 20px;
+        }
+        .section {
+          background: white;
+          padding: 20px;
+          border-radius: 8px;
+          margin-bottom: 20px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section h3 {
+          color: #1565c0;
+          margin-top: 0;
+        }
+        .week-selector {
+          padding: 10px;
+          background: #f8f9fa;
+          border-radius: 6px;
+          margin: 10px 0;
+        }
+        .week-option {
+          padding: 10px;
+          margin: 5px 0;
+          border: 2px solid #e0e0e0;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.3s;
+        }
+        .week-option:hover {
+          border-color: #1976d2;
+          background: #e3f2fd;
+        }
+        .week-option.selected {
+          border-color: #1976d2;
+          background: #e3f2fd;
+        }
+        .recipients-list {
+          background: #f5f5f5;
+          padding: 15px;
+          border-radius: 4px;
+          margin: 10px 0;
+        }
+        .recipient-item {
+          padding: 8px;
+          margin: 5px 0;
+          background: white;
+          border-left: 3px solid #1976d2;
+          border-radius: 2px;
+        }
+        button {
+          background: #1976d2;
+          color: white;
+          border: none;
+          padding: 12px 30px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 16px;
+          margin: 5px;
+        }
+        button:hover {
+          background: #1565c0;
+        }
+        button.secondary {
+          background: #757575;
+        }
+        button.secondary:hover {
+          background: #616161;
+        }
+        .status {
+          padding: 10px;
+          margin: 10px 0;
+          border-radius: 4px;
+          display: none;
+        }
+        .status.success {
+          background: #c8e6c9;
+          color: #2e7d32;
+        }
+        .status.error {
+          background: #ffcdd2;
+          color: #c62828;
+        }
+      </style>
+    </head>
+    <body>
+      <h2>📧 Send Weekly Schedule Email</h2>
+      
+      <div class="section">
+        <h3>📅 Step 1: Select Week</h3>
+        <div class="week-selector" id="weekSelector">
+          <div class="week-option" data-week="current" onclick="selectWeek('current')">
+            📍 Current Week (This Week)
+          </div>
+          <div class="week-option" data-week="next" onclick="selectWeek('next')">
+            ⏭️ Next Week
+          </div>
+          <div class="week-option" data-week="specific" onclick="selectWeek('specific')">
+            📆 Select Specific Date
+            <input type="date" id="specificDate" style="margin-left: 10px; padding: 5px;">
+          </div>
+        </div>
+        <div id="selectedWeekInfo" style="margin-top: 10px; font-weight: bold; color: #1976d2;"></div>
+      </div>
+      
+      <div class="section">
+        <h3>✉️ Step 2: Confirm Recipients</h3>
+        <p>The schedule will be sent to these distribution lists:</p>
+        <div class="recipients-list">
+          <div class="recipient-item">📧 Estates_CA@familyfirstas.com</div>
+          <div class="recipient-item">📧 Nest_CA@familyfirstas.com</div>
+          <div class="recipient-item">📧 Cove_CA@familyfirstas.com</div>
+        </div>
+        <p style="color: #666; font-size: 14px;">
+          💡 These distribution lists include all program coordinators and relevant staff
+        </p>
+      </div>
+      
+      <div class="section">
+        <h3>📋 Step 3: Preview & Confirm</h3>
+        <div id="confirmationArea" style="background: #e8f5e9; padding: 15px; border-radius: 4px; border: 2px solid #4CAF50;">
+          <h4 style="margin-top: 0; color: #2e7d32;">You will send:</h4>
+          <div id="weekConfirmation" style="font-size: 16px; margin: 10px 0; font-weight: bold; color: #1976d2;">
+            <!-- This will be filled by JavaScript -->
+          </div>
+          
+          <div id="schedulePreview" style="margin-top: 5px; padding: 10px; background: #fafafa; border: 1px solid #ddd; border-radius: 4px; font-family: Menlo,Consolas,monospace; white-space: pre-wrap; line-height:1.4; font-size: 13px; min-height:40px;">
+             <!-- Schedule will appear here -->
+           </div>
+        </div>
+      </div>
+      
+      <div id="status" class="status"></div>
+      
+      <div style="text-align: center; margin-top: 20px;">
+        <button onclick="sendEmails()">📨 Send Emails</button>
+        <button class="secondary" onclick="google.script.host.close()">Cancel</button>
+      </div>
+      
+      <script>
+        let selectedWeek = 'current';
+        
+        function getMonday(d) {
+          d = new Date(d);
+          var day = d.getDay(),
+              diff = d.getDate() - day + (day == 0 ? -6 : 1);
+          return new Date(d.setDate(diff));
+        }
+        
+        function formatDateRange(monday) {
+          const sunday = new Date(monday);
+          sunday.setDate(sunday.getDate() + 6);
+          
+          const options = { month: 'short', day: 'numeric', year: 'numeric' };
+          const mondayStr = monday.toLocaleDateString('en-US', options);
+          const sundayStr = sunday.toLocaleDateString('en-US', options);
+          
+          return mondayStr + ' - ' + sundayStr;
+        }
+        
+        function selectWeek(week) {
+          selectedWeek = week;
+          
+          // Update UI
+          document.querySelectorAll('.week-option').forEach(el => {
+            el.classList.remove('selected');
+          });
+          document.querySelector('[data-week="' + week + '"]').classList.add('selected');
+          
+          // Calculate the actual dates
+          let targetDate = new Date();
+          let confirmText = '';
+          
+          if (week === 'current') {
+            const monday = getMonday(targetDate);
+            confirmText = '📅 <span style="color: #1976d2;">THIS WEEK\'s Schedule</span><br>' +
+                         '📆 Week of: <strong>' + formatDateRange(monday) + '</strong>';
+          } else if (week === 'next') {
+            targetDate.setDate(targetDate.getDate() + 7);
+            const monday = getMonday(targetDate);
+            confirmText = '📅 <span style="color: #f57c00;">NEXT WEEK\'s Schedule</span><br>' +
+                         '📆 Week of: <strong>' + formatDateRange(monday) + '</strong>';
+          } else if (week === 'specific') {
+            const dateInput = document.getElementById('specificDate');
+            if (dateInput.value) {
+              const selectedDate = new Date(dateInput.value);
+              const monday = getMonday(selectedDate);
+              confirmText = '📅 <span style="color: #7b1fa2;">SPECIFIC WEEK\'s Schedule</span><br>' +
+                           '📆 Week of: <strong>' + formatDateRange(monday) + '</strong>';
+            } else {
+              confirmText = '⚠️ Please select a date above';
+            }
+          }
+          
+          document.getElementById('weekConfirmation').innerHTML = confirmText;
+          document.getElementById('selectedWeekInfo').innerHTML = confirmText.replace('<br>', ' - ');
+          // Auto refresh preview when week changes
+          loadCompactPreview();
+        }
+        
+        // Update when date changes
+        document.addEventListener('DOMContentLoaded', function() {
+          const dateInput = document.getElementById('specificDate');
+          if (dateInput) {
+            dateInput.addEventListener('change', function() {
+              if (selectedWeek === 'specific') {
+                selectWeek('specific');
+              }
+            });
+          }
+          // Auto-select current week and render initial preview
+          selectWeek('current');
+        });
+        
+        function loadCompactPreview() {
+          const preview = document.getElementById('schedulePreview');
+          preview.innerHTML = '<div style="text-align: center; color: #666;">Loading schedule...</div>';
+          
+          let weekDate = null;
+          if (selectedWeek === 'specific') {
+            weekDate = document.getElementById('specificDate').value;
+          }
+          
+          google.script.run
+            .withSuccessHandler(function(result) {
+              preview.innerHTML = result;
+            })
+            .withFailureHandler(function(error) {
+              preview.innerHTML = '⚠️ Error loading schedule';
+            })
+            .getCompactSchedulePreview(selectedWeek, weekDate);
+        }
+        
+        function sendEmails() {
+          const status = document.getElementById('status');
+          status.className = 'status';
+          status.style.display = 'block';
+          status.textContent = 'Sending emails...';
+          
+          let weekDate = null;
+          if (selectedWeek === 'specific') {
+            weekDate = document.getElementById('specificDate').value;
+            if (!weekDate) {
+              status.className = 'status error';
+              status.textContent = 'Please select a date first';
+              return;
+            }
+          }
+          
+          google.script.run
+            .withSuccessHandler(function(result) {
+              status.className = 'status success';
+              status.textContent = '✅ ' + result;
+              setTimeout(() => google.script.host.close(), 2000);
+            })
+            .withFailureHandler(function(error) {
+              status.className = 'status error';
+              status.textContent = '❌ Error: ' + error.toString();
+            })
+            .processWeeklyEmailSend(selectedWeek, weekDate);
+        }
+        
+        // Select current week by default
+        selectWeek('current');
+      </script>
+    </body>
+    </html>
+  `;
+  
+  const htmlOutput = HtmlService.createHtmlOutput(htmlContent)
+    .setWidth(600)
+    .setHeight(700);
+  
+  SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Send Weekly Schedule');
+}
+
+// Moved getEmailPreview and isSameWeek functions to after CONFIG definition (see line ~2500)
+
+/**
+ * Process the weekly email send with selected week
+ */
+function processWeeklyEmailSend(weekSelection, specificDate) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const scheduleSheet = ss.getSheetByName('SCHEDULE');
+  
+  // Determine which week to send
+  let targetDate = new Date();
+  if (weekSelection === 'next') {
+    targetDate.setDate(targetDate.getDate() + 7);
+  } else if (weekSelection === 'specific' && specificDate) {
+    targetDate = new Date(specificDate);
+  }
+  
+  // Get the Monday of the selected week
+  const weekStart = getWeekStart(targetDate);
+  
+  // Your 3 distribution lists
+  const distributionLists = [
+    'Estates_CA@familyfirstas.com',
+    'Nest_CA@familyfirstas.com',
+    'Cove_CA@familyfirstas.com'
+  ];
+  
+  // Store the selected week temporarily for the email generation
+  PropertiesService.getScriptProperties().setProperty('TEMP_EMAIL_WEEK', weekStart.toISOString());
+  
   try {
-    // Show dual email dialog with recipient setup
-    showDualEmailDialog();
+    const subject = `Family First - Weekly Schedule (Week of ${Utilities.formatDate(weekStart, CONFIG.DEFAULT_TIMEZONE, 'MMM d, yyyy')})`;
+    const htmlBody = createWeeklyScheduleHtml(); // This will use the TEMP_EMAIL_WEEK
+    const plainBody = 'Please view this email in HTML format to see the schedule.';
+    
+    // Send to each distribution list
+    let successCount = 0;
+    distributionLists.forEach(email => {
+      try {
+        sendEmailSafely(email, subject, plainBody, htmlBody, {
+          type: 'weekly_schedule',
+          duplicateWindowMs: 24 * 60 * 60 * 1000
+        });
+        successCount++;
   } catch (error) {
-    ui.alert('Error', 'Failed to send emails: ' + error.toString(), ui.ButtonSet.OK);
+        console.error(`Failed to send to ${email}:`, error);
+      }
+    });
+    
+    // Clear the temporary week
+    PropertiesService.getScriptProperties().deleteProperty('TEMP_EMAIL_WEEK');
+    
+    return `Successfully sent schedule for week of ${Utilities.formatDate(weekStart, CONFIG.DEFAULT_TIMEZONE, 'MMM d')} to ${successCount} distribution lists`;
+    
+  } catch (error) {
+    PropertiesService.getScriptProperties().deleteProperty('TEMP_EMAIL_WEEK');
+    throw error;
   }
 }
 
 /**
- * Show interactive dialog for dual email setup
+ * DEPRECATED - No longer needed with 3 distribution lists
+ * Keeping for backward compatibility only
  */
 function showDualEmailDialog() {
+  SpreadsheetApp.getUi().alert(
+    'Function Updated',
+    'This function has been replaced.\n\n' +
+    'Please use "Send Weekly Emails" which sends to the 3 distribution lists:\n' +
+    '• Estates_CA@familyfirstas.com\n' +
+    '• Nest_CA@familyfirstas.com\n' +
+    '• Cove_CA@familyfirstas.com',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+  return;
+}
+
+/**
+ * DEPRECATED - Original dual email dialog code
+ * Kept for reference but no longer used
+ */
+function showDualEmailDialog_DEPRECATED() {
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -408,7 +783,6 @@ function processDualEmails(pcEmails, houseRecipients) {
   
   return message;
 }
-
 /**
  * Create house-specific email HTML
  */
@@ -1097,11 +1471,9 @@ function getNextDayOfWeek(fromDate, dayName) {
  */
 function formatVendorEventDescription(vendor, day, houses) {
   return `📍 Family First Therapeutic Outing
-
 🏠 Participating Houses: ${houses || 'All Houses'}
 👥 Expected Clients: ~15-20
 🚗 Transportation: Family First Vans
-
 📋 Outing Details:
 • Activity: ${vendor}
 • Duration: 2 hours
@@ -1811,7 +2183,7 @@ function testVendorCalendarDisplay() {
 // ======================== CONSTANTS & CONFIG ========================
 
 const CONFIG = {
-  VERSION: '4.3.0',
+  VERSION: '5.0.0',
   PRODUCT_NAME: 'Family First Therapeutic Outings Scheduler',
   COMPANY: 'ClearHive Health',
   CLIENT: 'Family First Adolescent Services',
@@ -1898,21 +2270,568 @@ const CONFIG = {
   MAIN_OFFICE_HOURS: 'Monday-Friday: 8:00 AM - 6:00 PM',
   AFTER_HOURS_CONTACT: 'Call main number for on-call coordinator'
 };
-
 // Initialize PDF folder ID (will be auto-created if needed)
 CONFIG.VENDOR_PDF_FOLDER_ID = null;
+
+// ======================== EMAIL PREVIEW FUNCTIONS ========================
+
+/**
+ * Get email preview for the selected week
+ */
+function getEmailPreview(weekSelection, specificDate) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const scheduleSheet = ss.getSheetByName('SCHEDULE');
+  
+  if (!scheduleSheet) {
+    throw new Error('No schedule found');
+  }
+  
+  // Determine which week to preview
+  let targetDate = new Date();
+  if (weekSelection === 'next') {
+    targetDate.setDate(targetDate.getDate() + 7);
+  } else if (weekSelection === 'specific' && specificDate) {
+    targetDate = new Date(specificDate);
+  }
+  
+  // Get the Monday of the selected week
+  const weekStart = getWeekStart(targetDate);
+  
+  // Store the selected week temporarily for the preview generation
+  PropertiesService.getScriptProperties().setProperty('TEMP_EMAIL_WEEK', weekStart.toISOString());
+  
+  try {
+    const subject = `Family First - Weekly Schedule (Week of ${Utilities.formatDate(weekStart, CONFIG.DEFAULT_TIMEZONE, 'MMM d, yyyy')})`;
+    
+    // Get schedule data for preview
+    const data = scheduleSheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // Find the row for the selected week
+    let scheduleRow = null;
+    for (let i = 1; i < data.length; i++) {
+      const rowDate = new Date(data[i][0]);
+      if (isSameWeek(rowDate, weekStart)) {
+        scheduleRow = data[i];
+        break;
+      }
+    }
+    
+    if (!scheduleRow) {
+      throw new Error('No schedule found for the selected week');
+    }
+    
+    // Create a simplified preview HTML
+    let previewHtml = `
+      <div style="font-family: Arial, sans-serif;">
+        <h4 style="color: #1976d2; margin-bottom: 15px;">Week of ${Utilities.formatDate(weekStart, CONFIG.DEFAULT_TIMEZONE, 'MMMM d, yyyy')}</h4>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <thead>
+            <tr style="background: #1976d2; color: white;">
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">House</th>
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Vendor</th>
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Time</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    
+    // Add schedule data
+    let hasSchedule = false;
+    for (let col = 1; col < headers.length; col++) {
+      const house = headers[col];
+      if (!house || house === 'Options' || house === 'Locked?') continue;
+      
+      const cellValue = scheduleRow[col];
+      if (cellValue && cellValue !== 'UNASSIGNED' && cellValue !== 'TBD') {
+        hasSchedule = true;
+        const lines = cellValue.toString().split('\n');
+        const vendorName = lines[0] || 'TBD';
+        const time = lines[1] || 'Time TBD';
+        
+        previewHtml += `
+          <tr>
+            <td style="padding: 8px; border: 1px solid #ddd;">${house}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #1565c0;">${vendorName}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${time}</td>
+          </tr>
+        `;
+      }
+    }
+    
+    if (!hasSchedule) {
+      previewHtml += `
+        <tr>
+          <td colspan="3" style="padding: 20px; text-align: center; color: #666;">
+            No outings scheduled for this week yet
+          </td>
+        </tr>
+      `;
+    }
+    
+    previewHtml += `
+          </tbody>
+        </table>
+        <div style="margin-top: 15px; padding: 10px; background: #fff3e0; border-radius: 4px;">
+          <strong style="color: #f57c00;">📧 This will be sent to:</strong><br>
+          • Estates_CA@familyfirstas.com<br>
+          • Nest_CA@familyfirstas.com<br>
+          • Cove_CA@familyfirstas.com
+        </div>
+      </div>
+    `;
+    
+    // Clear the temporary week
+    PropertiesService.getScriptProperties().deleteProperty('TEMP_EMAIL_WEEK');
+    
+    return {
+      subject: subject,
+      htmlPreview: previewHtml
+    };
+    
+  } catch (error) {
+    PropertiesService.getScriptProperties().deleteProperty('TEMP_EMAIL_WEEK');
+    throw error;
+  }
+}
+
+/**
+ * Helper function to check if two dates are in the same week
+ */
+function isSameWeek(date1, date2) {
+  const oneDay = 24 * 60 * 60 * 1000;
+  const firstDate = new Date(date1);
+  const secondDate = new Date(date2);
+  
+  // Get Monday of each week
+  const firstMonday = new Date(firstDate);
+  firstMonday.setDate(firstDate.getDate() - (firstDate.getDay() || 7) + 1);
+  
+  const secondMonday = new Date(secondDate);
+  secondMonday.setDate(secondDate.getDate() - (secondDate.getDay() || 7) + 1);
+  
+  return Math.abs(firstMonday - secondMonday) < oneDay;
+}
+
+/**
+ * Get a simple schedule preview - just shows what's in the spreadsheet
+ */
+function getSimpleSchedulePreview(weekSelection, specificDate) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const scheduleSheet = ss.getSheetByName('SCHEDULE');
+    
+    if (!scheduleSheet) {
+      return '<div style="color: #666;">No schedule found. Please generate a schedule first.</div>';
+    }
+    
+    // Determine which week to preview
+    let targetDate = new Date();
+    if (weekSelection === 'next') {
+      targetDate.setDate(targetDate.getDate() + 7);
+    } else if (weekSelection === 'specific' && specificDate) {
+      targetDate = new Date(specificDate);
+    }
+    
+    // Get the Monday of the selected week
+    const weekStart = getWeekStart(targetDate);
+    
+    // Get schedule data
+    const data = scheduleSheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // Find the row for the selected week
+    let scheduleRow = null;
+    for (let i = 1; i < data.length; i++) {
+      const rowDate = new Date(data[i][0]);
+      if (isSameWeek(rowDate, weekStart)) {
+        scheduleRow = data[i];
+        break;
+      }
+    }
+    
+    if (!scheduleRow) {
+      return '<div style="color: #666;">No schedule found for this week.</div>';
+    }
+    
+    // Week header
+    const monday = getWeekStart(weekStart);
+    const sunday = new Date(monday);
+    sunday.setDate(sunday.getDate() + 6);
+    const header = `Week of ${Utilities.formatDate(monday, CONFIG.DEFAULT_TIMEZONE, 'MMM d, yyyy')} - ${Utilities.formatDate(sunday, CONFIG.DEFAULT_TIMEZONE, 'MMM d, yyyy')}`;
+
+    // Build simple HTML table
+    let html = '<div style="font-weight:600; margin-bottom:8px; color:#1976d2;">' + header + '</div>';
+    html += '<table style="width: 100%; border-collapse: collapse; font-size: 14px;">';
+    html += '<thead><tr style="background: #f5f5f5;">';
+    html += '<th style="padding: 8px; border: 1px solid #ddd; text-align: left;">House</th>';
+    html += '<th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Vendor</th>';
+    html += '<th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Time</th>';
+    html += '</tr></thead><tbody>';
+    
+    let hasSchedule = false;
+    for (let col = 1; col < headers.length; col++) {
+      const house = headers[col];
+      if (!house || house === 'Options' || house === 'Locked?') continue;
+      
+      const cellValue = scheduleRow[col];
+      if (cellValue && cellValue !== 'UNASSIGNED' && cellValue !== 'TBD') {
+        hasSchedule = true;
+        const lines = cellValue.toString().split('\n');
+        const vendorInfo = lines[0] || 'TBD';
+        const timeInfo = lines[1] || '';
+        html += '<tr>';
+        html += '<td style="padding: 6px; border: 1px solid #ddd;">' + house + '</td>';
+        html += '<td style="padding: 6px; border: 1px solid #ddd; color: #1976d2; font-weight: bold;">' + vendorInfo + '</td>';
+        html += '<td style="padding: 6px; border: 1px solid #ddd;">' + timeInfo + '</td>';
+        html += '</tr>';
+      }
+    }
+    
+    if (!hasSchedule) {
+      html += '<tr><td colspan="2" style="padding: 15px; text-align: center; color: #666;">No outings scheduled for this week</td></tr>';
+    }
+    
+    html += '</tbody></table>';
+    
+    return html;
+    
+  } catch (error) {
+    console.error('Error in getSimpleSchedulePreview:', error);
+    return '<div style="color: red;">Error: ' + error.toString() + '</div>';
+  }
+}
+
+/**
+ * Get a very compact text-only preview
+ * Format: Week of MMM d – MMM d\n- House: Vendor (Time)\n...
+ */
+function getCompactSchedulePreview(weekSelection, specificDate) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const scheduleSheet = ss.getSheetByName('SCHEDULE');
+    if (!scheduleSheet) return 'No schedule found.';
+    
+    // Determine week
+    let targetDate = new Date();
+    if (weekSelection === 'next') targetDate.setDate(targetDate.getDate() + 7);
+    else if (weekSelection === 'specific' && specificDate) targetDate = new Date(specificDate);
+    const monday = getWeekStart(targetDate);
+    const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
+    
+    // Find row for week
+    const data = scheduleSheet.getDataRange().getValues();
+    const headers = data[0];
+    let row = null;
+    for (let i = 1; i < data.length; i++) {
+      const date = new Date(data[i][0]);
+      if (isSameWeek(date, monday)) { row = data[i]; break; }
+    }
+    if (!row) return 'No schedule found for this week';
+    
+    // Build compact lines
+    let lines = [];
+    for (let c = 1; c < headers.length; c++) {
+      const house = headers[c];
+      if (!house || house === 'Options' || house === 'Locked?') continue;
+      const cell = row[c];
+      if (!cell || cell === 'UNASSIGNED' || cell === 'TBD') continue;
+      const parts = cell.toString().split('\n');
+      const vendor = (parts[0] || 'TBD').trim();
+      const time = (parts[1] || '').trim();
+      lines.push(`- ${house}: ${vendor}${time ? ' (' + time + ')' : ''}`);
+    }
+    if (lines.length === 0) lines.push('No outings scheduled');
+    
+    const header = `Week of ${Utilities.formatDate(monday, CONFIG.DEFAULT_TIMEZONE, 'MMM d')} – ${Utilities.formatDate(sunday, CONFIG.DEFAULT_TIMEZONE, 'MMM d')}`;
+    
+    // Convert to simple HTML <pre> to preserve newlines, easy to read
+    const text = [header, '', ...lines].join('\n');
+    return '<pre style="margin:0;white-space:pre-wrap;font-family:Menlo,Consolas,monospace;font-size:13px">' +
+           text.replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s])) +
+           '</pre>';
+  } catch (e) {
+    console.error('getCompactSchedulePreview error', e);
+    return 'Error: ' + e;
+  }
+}
 
 // ======================== UTILITY FUNCTIONS ========================
 
 /**
+ * Simplify spreadsheet by removing unnecessary tabs
+ * Keeps only essential sheets for streamlined operation
+ */
+function simplifySpreadsheetStructure() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Essential sheets to keep (including rotation rules for complex vendor management)
+  const essentialSheets = [
+    'PROGRAMS',
+    'VENDORS', 
+    'SCHEDULE',
+    'CONFIG',
+    'ROTATION_RULES' // ESSENTIAL for complex vendor agreements and rotation logic
+  ];
+  
+  // Sheets that can be removed or are auto-generated
+  const optionalSheets = [
+    'EMAIL_RECIPIENTS', // Now using distribution lists in CONFIG
+    'VENDOR_CALENDAR_LINKS', // Not needed with PDF approach
+    'PUBLIC_VENDOR_LINKS', // Not needed with PDF approach
+    'ROTATION_CALENDAR', // Redundant with SCHEDULE
+    'DIAGNOSTICS_REPORT', // Generate on-demand instead
+    'RULES_MISMATCH' // Keep visible if you need to debug rotation conflicts
+  ];
+  
+  const response = ui.alert(
+    '🧹 Simplify Spreadsheet Structure',
+    'This will:\n\n' +
+    '✅ Keep essential sheets: ' + essentialSheets.join(', ') + '\n\n' +
+    '❌ Archive these optional sheets: ' + optionalSheets.join(', ') + '\n\n' +
+    'Archived sheets will be hidden, not deleted (you can unhide them later).\n\n' +
+    'Continue?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (response !== ui.Button.YES) return;
+  
+  let hiddenCount = 0;
+  let errors = [];
+  
+  // Hide optional sheets
+  optionalSheets.forEach(sheetName => {
+    try {
+      const sheet = ss.getSheetByName(sheetName);
+      if (sheet) {
+        sheet.hideSheet();
+        hiddenCount++;
+        console.log(`Hidden sheet: ${sheetName}`);
+      }
+    } catch (error) {
+      errors.push(`${sheetName}: ${error.toString()}`);
+    }
+  });
+  
+  // Update CONFIG to include email recipients directly
+  updateConfigWithEmailRecipients();
+  
+  let message = `✅ Spreadsheet simplified!\n\n`;
+  message += `Hidden ${hiddenCount} optional sheets.\n`;
+  message += `Essential sheets remain visible.\n\n`;
+  message += `To restore hidden sheets:\n`;
+  message += `View → Hidden sheets → Select sheet to unhide`;
+  
+  if (errors.length > 0) {
+    message += `\n\nMinor issues:\n${errors.join('\n')}`;
+  }
+  
+  ui.alert('Simplification Complete', message, ui.ButtonSet.OK);
+}
+
+/**
+ * Update CONFIG sheet to include email distribution lists
+ */
+function updateConfigWithEmailRecipients() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const configSheet = ss.getSheetByName('CONFIG');
+  
+  if (!configSheet) return;
+  
+  // Find last row with data
+  const lastRow = configSheet.getLastRow();
+  
+  // Add email distribution lists to CONFIG
+  const emailConfig = [
+    ['', ''],
+    ['EMAIL_DISTRIBUTION_LISTS', ''],
+    ['Estates_Distribution', 'Estates_CA@familyfirstas.com'],
+    ['Nest_Distribution', 'Nest_CA@familyfirstas.com'],
+    ['Cove_Distribution', 'Cove_CA@familyfirstas.com'],
+    ['', ''],
+    ['PDF_SETTINGS', ''],
+    ['Auto_Generate_PDFs', 'TRUE'],
+    ['Email_PDFs_Weekly', 'TRUE']
+  ];
+  
+  // Add to CONFIG sheet
+  const startRow = lastRow + 2;
+  configSheet.getRange(startRow, 1, emailConfig.length, 2).setValues(emailConfig);
+  
+  // Format the new section
+  configSheet.getRange(startRow + 1, 1, 1, 2)
+    .setBackground('#1976d2')
+    .setFontColor('#ffffff')
+    .setFontWeight('bold');
+    
+  configSheet.getRange(startRow + 6, 1, 1, 2)
+    .setBackground('#4CAF50')
+    .setFontColor('#ffffff')
+    .setFontWeight('bold');
+}
+
+/**
+ * Show where PDFs are stored and how they're organized
+ */
+function showPDFOrganization() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // Check current folder structure
+  let folderInfo = '';
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const folderId = properties.getProperty('VENDOR_PDF_FOLDER_ID');
+    
+    if (folderId) {
+      try {
+        const folder = DriveApp.getFolderById(folderId);
+        const folderUrl = folder.getUrl();
+        folderInfo = `Current PDF Folder: ${folder.getName()}\n📁 Open Folder: ${folderUrl}\n`;
+        
+        // Count subfolders
+        const subfolders = folder.getFolders();
+        let subfolderCount = 0;
+        let recentFolders = [];
+        while (subfolders.hasNext() && subfolderCount < 5) {
+          const subfolder = subfolders.next();
+          recentFolders.push(`  • ${subfolder.getName()}`);
+          subfolderCount++;
+        }
+        if (recentFolders.length > 0) {
+          folderInfo += `\nRecent Schedule Folders:\n${recentFolders.join('\n')}`;
+        }
+      } catch (e) {
+        folderInfo = 'PDF folder needs to be created (will create automatically when needed)';
+      }
+    } else {
+      folderInfo = 'No PDF folder set up yet (will create automatically when you generate PDFs)';
+    }
+  } catch (e) {
+    folderInfo = 'Unable to check folder status';
+  }
+  
+  const explanation = `
+📁 PDF ORGANIZATION STRUCTURE
+
+WHERE PDFs ARE STORED:
+━━━━━━━━━━━━━━━━━━━━
+${folderInfo}
+
+FOLDER STRUCTURE:
+━━━━━━━━━━━━━━━
+📁 Google Drive (Root)
+  └── 📁 Vendor Schedule PDFs - 2025
+      │
+      ├── 📁 House Schedules - [Date] (FOR PROGRAM COORDINATORS)
+      │   ├── 📄 Estates 1_Schedule.pdf - Shows all vendors coming to Estates 1
+      │   ├── 📄 Estates 2_Schedule.pdf - Shows all vendors coming to Estates 2
+      │   ├── 📄 Cove 1_Schedule.pdf - Shows all vendors coming to Cove 1
+      │   ├── 📄 Cove 2_Schedule.pdf - Shows all vendors coming to Cove 2
+      │   └── 📄 Nest 1_Schedule.pdf - Shows all vendors coming to Nest 1
+      │
+      └── 📁 Vendor PDFs (FOR VENDORS)
+          ├── 📄 Surf_Therapy_Schedule_2025.pdf - Shows all houses Surf Therapy visits
+          ├── 📄 Goat_Farm_Schedule_2025.pdf - Shows all houses Goat Farm visits
+          └── 📄 Equestrian_Schedule_2025.pdf - Shows all houses Equestrian visits
+
+HOW IT WORKS:
+━━━━━━━━━━━━━
+1. MAIN FOLDER: "Vendor Schedule PDFs - [Year]"
+   • Created automatically first time you generate PDFs
+   • One folder per year
+   • Shared with anyone who has the link
+
+2. HOUSE SCHEDULES: Subfolder with date
+   • New folder each time you generate
+   • Contains one PDF per house/program
+   • Each PDF shows that house's complete schedule
+
+3. ACCESS:
+   • PDFs are set to "Anyone with link can view"
+   • No Google account needed to view
+   • Can be downloaded and printed
+
+TO GENERATE PDFs:
+━━━━━━━━━━━━━━━━
+📊 Reports & Analytics → 🏠 Generate House/Program PDFs
+
+TO FIND YOUR PDFs:
+━━━━━━━━━━━━━━━━━
+1. After generating, you'll get a dialog with all links
+2. Check your Google Drive for "Vendor Schedule PDFs - 2025"
+3. Or use the link provided in the generation dialog
+
+SHARING PDFs:
+━━━━━━━━━━━━
+• Click "Email PDFs to Distribution Lists" after generating
+• Or copy individual PDF links from the dialog
+• Or share the entire folder link
+  `;
+  
+  ui.alert('📁 PDF Organization Guide', explanation, ui.ButtonSet.OK);
+}
+
+/**
+ * Show what each sheet is used for
+ */
+function explainSheetPurposes() {
+  const ui = SpreadsheetApp.getUi();
+  
+  const explanation = `
+📊 SPREADSHEET TABS EXPLAINED
+
+ESSENTIAL TABS FOR YOUR OPERATION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ PROGRAMS - Houses/programs with times and preferences
+✅ VENDORS - Vendor list with contact info, agreements, and availability
+✅ SCHEDULE - Generated weekly/monthly schedules
+✅ CONFIG - System settings and email distribution lists
+✅ ROTATION_RULES - Complex vendor rotation logic and agreements
+   • Minimum weeks between same vendor
+   • Priority vendors that must appear weekly
+   • Special rules for vendor combinations
+   • Blackout dates and restrictions
+
+OPTIONAL TABS (Can be hidden):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ EMAIL_RECIPIENTS - Replaced by 3 distribution lists
+❌ VENDOR_CALENDAR_LINKS - Not needed with PDF approach
+❌ PUBLIC_VENDOR_LINKS - Not needed with PDF approach
+❌ ROTATION_CALENDAR - Duplicate of SCHEDULE data
+⚠️ DIAGNOSTICS_REPORT - Keep if you need to troubleshoot
+⚠️ RULES_MISMATCH - Keep if debugging rotation conflicts
+
+YOUR VENDOR ROTATION SYSTEM:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The ROTATION_RULES tab is CRITICAL for managing:
+• Vendor agreements (weekly, bi-weekly, monthly)
+• Minimum spacing between repeat vendors (e.g., 3 weeks)
+• Priority vendors that must appear every week
+• Capacity limits per vendor
+• Blackout dates for specific vendors
+• House-specific vendor preferences
+
+RECOMMENDATION:
+━━━━━━━━━━━━━━━
+Keep all 5 essential tabs visible.
+Hide calendar-related tabs since you're using PDFs.
+Keep RULES_MISMATCH visible if you're actively managing conflicts.
+  `;
+  
+  ui.alert('Sheet Purpose Guide', explanation, ui.ButtonSet.OK);
+}
+
+/**
  * Update email recipients to only the 3 distribution lists
+ * Run this function to immediately switch to distribution lists only
  */
 function updateToDistributionListsOnly() {
   const properties = PropertiesService.getScriptProperties();
   const distributionLists = [
-    'bhtprogramcoordinatorrecipients@gmail.com',
-    'bhthouse1recipients@gmail.com', 
-    'bhthouse2recipients@gmail.com'
+    'Estates_CA@familyfirstas.com',
+    'Nest_CA@familyfirstas.com',
+    'Cove_CA@familyfirstas.com'
   ];
   
   properties.setProperty(CONFIG.RECIPIENTS_KEY, JSON.stringify(distributionLists));
@@ -1927,6 +2846,17 @@ function updateToDistributionListsOnly() {
   } catch (error) {
     console.log('Could not update EMAIL RECIPIENTS sheet:', error);
   }
+  
+  // Show confirmation
+  SpreadsheetApp.getUi().alert(
+    '✅ Email Recipients Updated',
+    'Email recipients have been updated to:\n\n' +
+    '• Estates_CA@familyfirstas.com\n' +
+    '• Nest_CA@familyfirstas.com\n' +
+    '• Cove_CA@familyfirstas.com\n\n' +
+    'All weekly schedules will now be sent to these distribution lists only.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
   
   return distributionLists;
 }
@@ -2028,26 +2958,25 @@ function onOpen() {
     
     // Main Actions (most used items at the top)
     menu.addItem('📅 Generate Schedule', 'generateScheduleWithUI')
-    .addItem('📧 Send Email Now (Choose Type)', 'sendManualEmail')
+  .addItem('📧 Send Weekly Schedule', 'sendWeeklyEmailsToDistributionLists')
         .addItem('🔄 Refill This Week', 'refillThisWeekSmart')
         .addItem('🔁 Replace Cancelled Outing', 'replaceOutingUI')
         .addSeparator();
     
     // Email Management submenu
     menu.addSubMenu(ui.createMenu('📧 Email Management')
+        .addItem('📧 Send Weekly Schedule', 'sendWeeklyEmailsToDistributionLists')
+        .addSeparator()
+        .addItem('📋 View Distribution Lists', 'checkEmailRecipients')
           .addItem('👤 Check Current Sender', 'quickSenderCheck')
-          .addItem('📋 View Recipients List', 'checkEmailRecipients')
-          .addItem('✏️ Manage Recipients', 'manageEmailRecipients')
-          .addItem('📥 Bulk Add Recipients', 'bulkAddEmailRecipients')
+        .addSeparator()
           .addItem('🔒 Duplicate Prevention Status', 'viewEmailDuplicateStatus')
           .addItem('📊 Email Report', 'viewEmailReport')
           .addSeparator()
           .addItem('👀 Quick Email Preview', 'quickEmailPreview')
           .addItem('🏠 Preview House Email', 'previewHouseEmail')
           .addItem('👀 Preview Email Content', 'previewEmailContent')
-          .addItem('🧪 Send Test Email', 'testEmailSafely')
-          .addItem('📧 Test Distribution List', 'testDistributionListDelivery')
-          .addItem('📨 Send Onboarding Email', 'sendOnboardingEmail'));
+        .addItem('🧪 Send Test Email', 'testEmailSafely'));
     
     // Visual Tools submenu
     menu.addSubMenu(ui.createMenu('🎨 Visual Tools')
@@ -2067,11 +2996,17 @@ function onOpen() {
           .addItem('✅ Validate All Data', 'validateAllData')
           .addItem('📋 View Audit Log', 'viewAuditLog')
           .addSeparator()
-          .addItem('📄 Generate Vendor PDFs', 'generateVendorSchedulePdfs')
+          .addItem('🏠 Generate PDFs for Each HOUSE (for Programs)', 'generateHousePDFSchedules')
+          .addItem('👥 Generate PDFs for Each VENDOR (for Vendors)', 'generateVendorSchedulePdfs')
+          .addItem('📁 Where Are My PDFs?', 'showPDFOrganization')
+          .addSeparator()
           .addItem('🔗 Create Public Vendor Schedules', 'createPublicVendorSchedules'));
     
     // Settings submenu
     menu.addSubMenu(ui.createMenu('⚙️ Settings & Setup')
+          .addItem('🧹 Simplify Spreadsheet Structure', 'simplifySpreadsheetStructure')
+          .addItem('📋 Explain Sheet Purposes', 'explainSheetPurposes')
+          .addSeparator()
           .addItem('✉️ Email Sender Setup', 'checkEmailSenderSetup')
           .addItem('🏢 Work Account Setup', 'setupWorkAccount')
           .addItem('🔐 Setup Permissions', 'setupPermissions')
@@ -2113,7 +3048,6 @@ function onOpen() {
     console.log("onOpen error:", error);
   }
 }
-
 /**
  * First-run initialization and migration
  */
@@ -2499,9 +3433,9 @@ function setupEmailRecipientsSheet(ss) {
   // Only the 3 distribution lists you requested
   const sampleData = [
     // Distribution lists only
-    ['bhtprogramcoordinatorrecipients@gmail.com', 'BHT Program Coordinator Recipients', 'Distribution List', 'TRUE'],
-    ['bhthouse1recipients@gmail.com', 'BHT House 1 Recipients', 'Distribution List', 'TRUE'],
-    ['bhthouse2recipients@gmail.com', 'BHT House 2 Recipients', 'Distribution List', 'TRUE']
+    ['Estates_CA@familyfirstas.com', 'Estates CA Distribution List', 'Distribution List', 'TRUE'],
+    ['Nest_CA@familyfirstas.com', 'Nest CA Distribution List', 'Distribution List', 'TRUE'],
+    ['Cove_CA@familyfirstas.com', 'Cove CA Distribution List', 'Distribution List', 'TRUE']
   ];
   
   const allData = [headers, ...sampleData];
@@ -2513,8 +3447,8 @@ function setupEmailRecipientsSheet(ss) {
     .setFontColor('#ffffff')
     .setFontWeight('bold');
   
-  // Add note about updating emails
-  sheet.getRange(2, 1).setNote('IMPORTANT: Update these with your actual email addresses!');
+  // Add note about distribution lists
+  sheet.getRange(2, 1).setNote('These are the main distribution lists for weekly schedules');
   
   sheet.autoResizeColumns(1, headers.length);
   sheet.setFrozenRows(1);
@@ -2914,7 +3848,6 @@ function createFullMenu() {
     SpreadsheetApp.getUi().ButtonSet.OK
   );
 }
-
 /**
  * Simple test function to check if script is working
  */
@@ -3604,7 +4537,6 @@ function replaceOutingUI() {
     ui.alert('Error', 'Failed to find replacement: ' + error.toString(), ui.ButtonSet.OK);
   }
 }
-
 /**
  * Find a suitable replacement vendor for a cancelled outing
  */
@@ -4336,9 +5268,7 @@ class SmartScheduler {
     return this.conflictCount;
   }
 }
-
 // ======================== VENDOR CALENDAR MANAGER CLASS ========================
-
 /**
  * Manages all vendor calendar operations
  * Handles calendar setup, syncing, and access management
@@ -5054,9 +5984,7 @@ class VendorStateManager {
     });
   }
 }
-
 // ======================== VENDOR MANAGER CLASS ========================
-
 /**
  * VendorManager class
  * Manages core vendor operations including schedule syncing and access sharing
@@ -5222,45 +6150,6 @@ class VendorManager {
         `).join('')}
         
         ${results.errors.length > 0 ? `
-  
-  /**
-   * Gets vendor information from state
-   */
-  getVendorInfo(vendorName) {
-    const state = this.stateManager.getState();
-    return state.vendors.find(v => v.name === vendorName) || null;
-  }
-
-  /**
-   * Handles state changes from VendorStateManager
-   */
-  handleStateChange(newState, oldState) {
-    // Update vendor sheet when state changes
-    if (JSON.stringify(newState.vendors) !== JSON.stringify(oldState.vendors)) {
-      this.updateVendorSheet(newState.vendors);
-    }
-  }
-  
-  /**
-   * Updates the vendor sheet with latest state
-   */
-  updateVendorSheet(vendors) {
-    const vendorsSheet = this.ss.getSheetByName('Vendors');
-    const headers = vendorsSheet.getRange(1, 1, 1, vendorsSheet.getLastColumn()).getValues()[0];
-    
-    // Convert vendors array to sheet format
-    const vendorRows = vendors.map(vendor => {
-      return headers.map(header => vendor[header] || '');
-    });
-    
-    // Clear existing data (except headers) and write new data
-    if (vendorsSheet.getLastRow() > 1) {
-      vendorsSheet.getRange(2, 1, vendorsSheet.getLastRow() - 1, headers.length).clear();
-    }
-    if (vendorRows.length > 0) {
-      vendorsSheet.getRange(2, 1, vendorRows.length, headers.length).setValues(vendorRows);
-    }
-  }
           <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 15px; margin: 20px 0;">
             <h3 style="color: #856404; margin-top: 0;">⚠️ Issues Found:</h3>
             ${results.errors.map(e => `
@@ -5660,7 +6549,6 @@ class ScheduleWriter {
     return vendorColorMap;
   }
 }
-
 // ======================== DATA MANAGEMENT ========================
 
 class DataManager {
@@ -6151,7 +7039,6 @@ class DataManager {
     this.cache.remove(`${dataType}_data`);
   }
 }
-
 // ======================== CALENDAR SYNCHRONIZATION ========================
 
 class CalendarSync {
@@ -6838,7 +7725,6 @@ Therapeutic Outings Scheduler System
     handleError(error, 'Test Distribution List Delivery');
   }
 }
-
 /**
  * Send weekly schedule email with safety checks
  */
@@ -7470,7 +8356,6 @@ function testEmailGeneration() {
     handleError(error, 'Email Test Generation');
   }
 }
-
 class EmailScheduler {
   constructor() {
     this.ss = SpreadsheetApp.getActive();
@@ -8206,7 +9091,6 @@ class EmailScheduler {
     
     return html;
   }
-
   /**
    * Create HTML table for schedule
    */
@@ -8968,9 +9852,6 @@ function doPost(e) {
  * Show current incident form URL
  */
 /**
- * Test form integration
- */
-/**
  * Create incident reporting form (LEGACY - kept for compatibility)
  */
 function createIncidentForm(params) {
@@ -9225,21 +10106,6 @@ function createIncidentForm(params) {
               <div class="checkbox-item">
                 <input type="checkbox" id="property" name="incidentType" value="Property">
                 <label for="property">Property Damage</label>
-              </div>
-              <div class="checkbox-item">
-                <input type="checkbox" id="contraband" name="incidentType" value="Contraband">
-                <label for="contraband">Contraband</label>
-              </div>
-              <div class="checkbox-item">
-                <input type="checkbox" id="elopement" name="incidentType" value="Elopement">
-                <label for="elopement">Elopement/Wandering</label>
-              </div>
-              <div class="checkbox-item">
-                <input type="checkbox" id="transport" name="incidentType" value="Transport">
-                <label for="transport">Transportation</label>
-              </div>
-              <div class="checkbox-item">
-                <input type="checkbox" id="other" name="incidentType" value="Other">
               </div>
               <div class="checkbox-item">
                 <input type="checkbox" id="contraband" name="incidentType" value="Contraband">
@@ -9732,14 +10598,504 @@ function sendIncidentNotification(data, reportId) {
     console.error('Failed to send incident notification:', error);
   }
 }
-
 // ======================== ANALYTICS & REPORTING ========================
+/**
+ * Generate PDF schedules for each house/program
+ * This creates clean, professional PDFs that programs can distribute to their staff
+ * without needing to share Google Calendars
+ */
+function generateHousePDFSchedules() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const scheduleSheet = ss.getSheetByName('SCHEDULE');
+    
+    if (!scheduleSheet) {
+      ui.alert('Error', 'No schedule found. Please generate a schedule first.', ui.ButtonSet.OK);
+      return;
+    }
+    
+    // Ensure PDF folder exists
+    const folderId = ensurePDFFolderExists();
+    const folder = DriveApp.getFolderById(folderId);
+    
+    // Create subfolder for house schedules
+    const houseFolder = folder.createFolder(`House Schedules - ${new Date().toLocaleDateString()}`);
+    
+    // Get schedule data
+    const data = scheduleSheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // Generate PDF for each house
+    const houses = headers.filter(h => h && h !== 'Date' && h !== 'Options' && h !== 'Locked?');
+    let pdfCount = 0;
+    const pdfUrls = [];
+    
+    for (const house of houses) {
+      const houseCol = headers.indexOf(house);
+      if (houseCol === -1) continue;
+      
+      // Collect house schedule
+      const houseSchedule = [];
+      for (let row = 1; row < data.length; row++) {
+        const date = data[row][0];
+        const vendor = data[row][houseCol];
+        if (date && vendor && vendor !== 'UNASSIGNED') {
+          houseSchedule.push({
+            date: new Date(date),
+            vendor: vendor,
+            dateStr: Utilities.formatDate(new Date(date), Session.getScriptTimeZone(), 'EEEE, MMM d')
+          });
+        }
+      }
+      
+      // Create HTML for this house
+      const html = createHouseScheduleHtml(house, houseSchedule);
+      
+      // Convert to PDF
+      const blob = Utilities.newBlob(html, 'text/html', `${house}_Schedule.html`)
+        .getAs('application/pdf')
+        .setName(`${house}_Schedule_${new Date().toLocaleDateString().replace(/\//g, '-')}.pdf`);
+      
+      // Save PDF
+      const pdfFile = houseFolder.createFile(blob);
+      pdfFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      pdfUrls.push({
+        house: house,
+        url: pdfFile.getUrl()
+      });
+      pdfCount++;
+    }
+    
+    // Show results with links
+    showPDFLinksDialog(pdfUrls, houseFolder.getUrl());
+    
+    // Log activity
+    auditLog('HOUSE_PDFS_GENERATED', {
+      count: pdfCount,
+      houses: houses,
+      folderUrl: houseFolder.getUrl()
+    });
+    
+  } catch (error) {
+    ui.alert('Error', 'Failed to generate PDFs: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
 
 /**
- * Generate branded PDF schedules for each vendor
+ * Create HTML content for house-specific schedule PDF
+ */
+function createHouseScheduleHtml(houseName, schedule) {
+  const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  
+  // Group schedule by week
+  const weeks = {};
+  schedule.forEach(item => {
+    const weekStart = getWeekStart(item.date);
+    const weekKey = weekStart.toISOString().split('T')[0];
+    if (!weeks[weekKey]) {
+      weeks[weekKey] = [];
+    }
+    weeks[weekKey].push(item);
+  });
+  
+  let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        @page { size: letter portrait; margin: 0.5in; }
+        body { 
+          font-family: 'Segoe UI', Arial, sans-serif; 
+          color: #333; 
+          margin: 0; 
+          padding: 20px;
+          line-height: 1.6;
+        }
+        .header {
+          background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+          color: white;
+          padding: 30px;
+          text-align: center;
+          border-radius: 10px;
+          margin-bottom: 30px;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+          margin: 0;
+          font-size: 28px;
+          font-weight: 300;
+          letter-spacing: 1px;
+        }
+        .header .subtitle {
+          margin-top: 10px;
+          font-size: 16px;
+          opacity: 0.95;
+        }
+        .info-box {
+          background: #f8f9fa;
+          border-left: 4px solid #1976d2;
+          padding: 15px;
+          margin-bottom: 25px;
+          border-radius: 4px;
+        }
+        .info-box h3 {
+          margin: 0 0 10px 0;
+          color: #1976d2;
+          font-size: 18px;
+        }
+        .week-section {
+          margin-bottom: 30px;
+          page-break-inside: avoid;
+        }
+        .week-header {
+          background: #e3f2fd;
+          padding: 10px 15px;
+          border-radius: 6px;
+          margin-bottom: 15px;
+          font-weight: 600;
+          color: #1565c0;
+          font-size: 16px;
+        }
+        .schedule-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 20px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .schedule-table th {
+          background: #1976d2;
+          color: white;
+          padding: 12px;
+          text-align: left;
+          font-weight: 500;
+        }
+        .schedule-table td {
+          padding: 12px;
+          border-bottom: 1px solid #e0e0e0;
+          background: white;
+        }
+        .schedule-table tr:hover td {
+          background: #f5f5f5;
+        }
+        .vendor-name {
+          font-weight: 600;
+          color: #1565c0;
+        }
+        .footer {
+          margin-top: 40px;
+          padding-top: 20px;
+          border-top: 2px solid #e0e0e0;
+          text-align: center;
+          color: #666;
+          font-size: 12px;
+        }
+        .contact-info {
+          background: #fff3e0;
+          border: 1px solid #ffb74d;
+          padding: 15px;
+          border-radius: 6px;
+          margin-bottom: 25px;
+        }
+        .contact-info h4 {
+          margin: 0 0 10px 0;
+          color: #f57c00;
+        }
+        @media print {
+          .header {
+            background: #1976d2 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>${houseName} - Therapeutic Outings Schedule</h1>
+        <div class="subtitle">${currentMonth}</div>
+      </div>
+      
+      <div class="info-box">
+        <h3>📋 Schedule Overview</h3>
+        <p>This document contains the therapeutic outing schedule for <strong>${houseName}</strong>.</p>
+        <p>Total outings scheduled: <strong>${schedule.length}</strong></p>
+      </div>
+      
+      <div class="contact-info">
+        <h4>📞 Important Contacts</h4>
+        <p><strong>Main Office:</strong> (561) 555-0123</p>
+        <p><strong>Emergency:</strong> (561) 555-0911</p>
+        <p><strong>Email:</strong> scheduling@familyfirstas.com</p>
+      </div>
+  `;
+  
+  // Add schedule by week
+  Object.keys(weeks).sort().forEach(weekKey => {
+    const weekStart = new Date(weekKey);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    
+    const weekLabel = `Week of ${Utilities.formatDate(weekStart, Session.getScriptTimeZone(), 'MMM d')} - ${Utilities.formatDate(weekEnd, Session.getScriptTimeZone(), 'MMM d, yyyy')}`;
+    
+    html += `
+      <div class="week-section">
+        <div class="week-header">${weekLabel}</div>
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th style="width: 30%;">Date</th>
+              <th style="width: 40%;">Vendor</th>
+              <th style="width: 30%;">Time</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    
+    weeks[weekKey].forEach(item => {
+      const vendorLines = item.vendor.toString().split('\n');
+      const vendorName = vendorLines[0];
+      const time = vendorLines[1] || 'Time TBD';
+      
+      html += `
+        <tr>
+          <td>${item.dateStr}</td>
+          <td class="vendor-name">${vendorName}</td>
+          <td>${time}</td>
+        </tr>
+      `;
+    });
+    
+    html += `
+          </tbody>
+        </table>
+      </div>
+    `;
+  });
+  
+  html += `
+      <div class="footer">
+        <p><strong>Family First Adolescent Services</strong></p>
+        <p>Generated on ${new Date().toLocaleString()}</p>
+        <p>This schedule is subject to change. Please check for updates regularly.</p>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  return html;
+}
+
+/**
+ * Get the start of the week (Monday) for a given date
+ */
+function getWeekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+}
+
+/**
+ * Show dialog with PDF links for easy sharing
+ */
+function showPDFLinksDialog(pdfUrls, folderUrl) {
+  const ui = SpreadsheetApp.getUi();
+  
+  let linksHtml = pdfUrls.map(item => `
+    <div style="margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+      <strong>${item.house}:</strong><br>
+      <a href="${item.url}" target="_blank" style="color: #1976d2; word-break: break-all;">${item.url}</a>
+    </div>
+  `).join('');
+  
+  const htmlContent = `
+    <div style="padding: 20px; font-family: Arial, sans-serif;">
+      <h2 style="color: #1976d2;">✅ PDF Schedules Generated!</h2>
+      
+      <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; margin: 15px 0;">
+        <h3 style="margin: 0 0 10px 0; color: #1565c0;">📁 All PDFs saved to:</h3>
+        <a href="${folderUrl}" target="_blank" style="color: #1976d2; font-weight: bold;">Open Folder in Google Drive</a>
+      </div>
+      
+      <h3 style="color: #333; margin-top: 20px;">📄 Individual PDF Links:</h3>
+      <div style="max-height: 300px; overflow-y: auto;">
+        ${linksHtml}
+      </div>
+      
+      <div style="margin-top: 20px; padding: 15px; background: #fff3e0; border-radius: 6px;">
+        <h4 style="margin: 0 0 10px 0; color: #f57c00;">📨 How to Share:</h4>
+        <ol style="margin: 5px 0; padding-left: 20px;">
+          <li>Click on any link above to open the PDF</li>
+          <li>Share the link via email to the house coordinators</li>
+          <li>PDFs are view-only and can be accessed by anyone with the link</li>
+          <li>No Google account required to view</li>
+        </ol>
+      </div>
+      
+      <div style="margin-top: 20px; text-align: center;">
+        <button onclick="emailPDFsToDistributionLists()" 
+                style="background: #4CAF50; color: white; border: none; padding: 10px 30px; 
+                       border-radius: 4px; cursor: pointer; font-size: 16px; margin-right: 10px;">
+          📧 Email PDFs to Distribution Lists
+        </button>
+        <button onclick="google.script.host.close()" 
+                style="background: #1976d2; color: white; border: none; padding: 10px 30px; 
+                       border-radius: 4px; cursor: pointer; font-size: 16px;">
+          Close
+        </button>
+      </div>
+    </div>
+    
+    <script>
+      function emailPDFsToDistributionLists() {
+        const pdfData = ${JSON.stringify(pdfUrls)};
+        const folderUrl = '${folderUrl}';
+        
+        google.script.run
+          .withSuccessHandler(function(result) {
+            alert('✅ PDFs have been emailed to the distribution lists!');
+            google.script.host.close();
+          })
+          .withFailureHandler(function(error) {
+            alert('❌ Error sending emails: ' + error.toString());
+          })
+          .emailPDFLinksToDistributionLists(pdfData, folderUrl);
+      }
+    </script>
+  `;
+  
+  const htmlOutput = HtmlService.createHtmlOutput(htmlContent)
+    .setWidth(600)
+    .setHeight(650);
+  
+  ui.showModalDialog(htmlOutput, 'PDF Schedules Ready');
+}
+
+/**
+ * Email PDF links to the distribution lists
+ */
+function emailPDFLinksToDistributionLists(pdfData, folderUrl) {
+  // Get the distribution lists
+  const distributionLists = [
+    'Estates_CA@familyfirstas.com',
+    'Nest_CA@familyfirstas.com',
+    'Cove_CA@familyfirstas.com'
+  ];
+  
+  const subject = `📋 Weekly Therapeutic Outings Schedules - PDFs Available`;
+  
+  // Create email body with all PDF links
+  let htmlBody = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="margin: 0; font-size: 24px;">📋 Weekly Schedule PDFs Ready</h1>
+      </div>
+      
+      <div style="padding: 30px; background: #f5f5f5;">
+        <p style="font-size: 16px; color: #333;">
+          The therapeutic outing schedules are now available as PDF documents. 
+          Each house has its own PDF with the complete schedule.
+        </p>
+        
+        <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h2 style="color: #1976d2; margin-top: 0;">📄 PDF Schedule Links:</h2>
+  `;
+  
+  pdfData.forEach(item => {
+    htmlBody += `
+      <div style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-left: 3px solid #1976d2; border-radius: 4px;">
+        <strong style="color: #1565c0; font-size: 16px;">${item.house}</strong><br>
+        <a href="${item.url}" style="color: #1976d2; text-decoration: none;">📥 Download PDF Schedule</a>
+      </div>
+    `;
+  });
+  
+  htmlBody += `
+        </div>
+        
+        <div style="background: #fff3e0; border: 1px solid #ffb74d; padding: 15px; border-radius: 6px; margin: 20px 0;">
+          <h3 style="margin: 0 0 10px 0; color: #f57c00;">📁 All PDFs in One Folder:</h3>
+          <a href="${folderUrl}" style="color: #1976d2; font-weight: bold;">Open Google Drive Folder</a>
+        </div>
+        
+        <div style="background: #e8f5e9; border: 1px solid #4caf50; padding: 15px; border-radius: 6px;">
+          <h3 style="margin: 0 0 10px 0; color: #2e7d32;">✅ Benefits of PDF Schedules:</h3>
+          <ul style="margin: 5px 0; padding-left: 20px; color: #2e7d32;">
+            <li>No Google account required to view</li>
+            <li>Can be printed for offline reference</li>
+            <li>Easy to share with staff members</li>
+            <li>Professional, clean format</li>
+            <li>Organized by week for easy reading</li>
+          </ul>
+        </div>
+      </div>
+      
+      <div style="background: #1976d2; color: white; padding: 20px; text-align: center; border-radius: 0 0 10px 10px;">
+        <p style="margin: 0; font-size: 14px;">
+          Family First Adolescent Services<br>
+          Generated on ${new Date().toLocaleString()}
+        </p>
+      </div>
+    </div>
+  `;
+  
+  const plainBody = `
+Weekly Therapeutic Outings Schedules - PDFs Available
+
+The therapeutic outing schedules are now available as PDF documents.
+
+PDF Links:
+${pdfData.map(item => `${item.house}: ${item.url}`).join('\n')}
+
+All PDFs Folder: ${folderUrl}
+
+Benefits of PDF Schedules:
+- No Google account required to view
+- Can be printed for offline reference
+- Easy to share with staff members
+- Professional, clean format
+- Organized by week for easy reading
+
+Family First Adolescent Services
+Generated on ${new Date().toLocaleString()}
+  `;
+  
+  // Send to distribution lists
+  distributionLists.forEach(email => {
+    try {
+      sendEmailSafely(email, subject, plainBody, htmlBody, {
+        type: 'schedule_pdf',
+        duplicateWindowMs: 24 * 60 * 60 * 1000
+      });
+    } catch (error) {
+      console.error(`Failed to send PDF links to ${email}:`, error);
+    }
+  });
+  
+  return 'PDFs emailed successfully to distribution lists';
+}
+
+/**
+ * Generate PDF schedules for each VENDOR showing which houses they visit
+ * This is different from house PDFs - vendors see their own schedule across all houses
  */
 function generateVendorSchedulePdfs() {
   const ui = SpreadsheetApp.getUi();
+  
+  const confirm = ui.alert(
+    '📄 Generate Vendor PDFs',
+    'This will create a PDF for each vendor showing:\n\n' +
+    '• All houses they are scheduled to visit\n' +
+    '• Dates and times for each visit\n' +
+    '• Contact information for houses\n\n' +
+    'This is different from House PDFs which show each house\'s schedule.\n\n' +
+    'Continue?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (confirm !== ui.Button.YES) return;
   
   try {
     // Show progress dialog
@@ -9909,7 +11265,6 @@ function generateVendorSchedulePdfs() {
     ui.alert('Error', 'Failed to generate PDFs: ' + error.toString(), ui.ButtonSet.OK);
   }
 }
-
 /**
  * Create HTML content for vendor schedule PDF
  */
@@ -10694,7 +12049,6 @@ function showSchedulingMetrics() {
     SpreadsheetApp.getUi().ButtonSet.OK
   );
 }
-
 class AnalyticsEngine {
   constructor() {
     this.ss = SpreadsheetApp.getActive();
@@ -11306,7 +12660,7 @@ function getProgressHTML() {
       margin-top: 10px;
     }
     .spinner {
-      border: 3px solid #f3f3f3;
+      border: 3px solid #f3f3f4;
       border-top: 3px solid #1a73e8;
       border-radius: 50%;
       width: 30px;
@@ -11400,7 +12754,7 @@ ${CONFIG.EMAIL_RECIPIENTS.join('\n')}
       <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
         <label style="display:flex; align-items:center; gap:8px;">
           <input type="checkbox" id="dryRun" checked />
-          <span>Dry run (don’t actually send)</span>
+          <span>Dry run (don't actually send)</span>
         </label>
       </div>
       
@@ -11441,7 +12795,6 @@ ${CONFIG.EMAIL_RECIPIENTS.join('\n')}
   // The dialog handles everything via the HTML buttons and google.script.run
   // No additional processing needed here
 }
-
 /**
  * Process onboarding emails from dialog (called from HTML)
  */
@@ -12228,7 +13581,6 @@ function testEmailConfiguration() {
     ui.alert('Error', 'Configuration test failed: ' + error.toString(), ui.ButtonSet.OK);
   }
 }
-
 /**
  * Send a test email to verify email functionality
  */
@@ -12751,6 +14103,17 @@ function sendTestToWork() {
  * Manage email recipients for weekly schedule
  */
 function manageEmailRecipients() {
+  SpreadsheetApp.getUi().alert(
+    'Fixed Distribution Lists',
+    'Email recipients are now fixed to the 3 distribution lists:\n\n' +
+    '• Estates_CA@familyfirstas.com\n' +
+    '• Nest_CA@familyfirstas.com\n' +
+    '• Cove_CA@familyfirstas.com\n\n' +
+    'These lists are managed by your email administrator.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+  return;
+  
   const ui = SpreadsheetApp.getUi();
   
   // Get current recipients from ScriptProperties (safe way)
@@ -12855,41 +14218,25 @@ function manageEmailRecipients() {
 function checkEmailRecipients() {
   const ui = SpreadsheetApp.getUi();
   
-  // Get recipients safely from ScriptProperties first
-  let recipients = [];
-  try {
+  // Always use the 3 distribution lists
+  const distributionLists = [
+    'Estates_CA@familyfirstas.com',
+    'Nest_CA@familyfirstas.com', 
+    'Cove_CA@familyfirstas.com'
+  ];
+  
+  // Update stored recipients to ensure consistency
     const properties = PropertiesService.getScriptProperties();
-    const storedRecipients = properties.getProperty(CONFIG.RECIPIENTS_KEY);
-    if (storedRecipients) {
-      recipients = JSON.parse(storedRecipients);
-    }
-  } catch (error) {
-    console.log('Error loading recipients from ScriptProperties:', error);
-  }
+  properties.setProperty(CONFIG.RECIPIENTS_KEY, JSON.stringify(distributionLists));
   
-  // Fallback to CONFIG.EMAIL_RECIPIENTS if it exists
-  if (recipients.length === 0 && typeof CONFIG.EMAIL_RECIPIENTS !== 'undefined' && CONFIG.EMAIL_RECIPIENTS && CONFIG.EMAIL_RECIPIENTS.length > 0) {
-    recipients = CONFIG.EMAIL_RECIPIENTS;
-  }
+  let report = `📋 Email Distribution Lists:\n\n`;
+  report += '📧 Estates_CA@familyfirstas.com\n   → Estates Program Coordinators & Staff\n\n';
+  report += '📧 Nest_CA@familyfirstas.com\n   → Nest Program Coordinators & Staff\n\n';
+  report += '📧 Cove_CA@familyfirstas.com\n   → Cove Program Coordinators & Staff\n\n';
+  report += '✅ All weekly schedules are sent to these 3 distribution lists.\n';
+  report += '💡 Each list includes all relevant program coordinators and staff.';
   
-  if (recipients.length === 0) {
-    ui.alert(
-      '⚠️ No Recipients Set',
-      'No email recipients are configured!\n\n' +
-      'Use "FFAS Scheduler → Manage Email Recipients" to add email addresses.',
-      ui.ButtonSet.OK
-    );
-    return;
-  }
-  
-  let report = `📋 Current Email Recipients (${recipients.length}):\n\n`;
-  recipients.forEach((email, index) => {
-    report += `${index + 1}. ${email}\n`;
-  });
-  
-  report += '\n✅ These people will receive the weekly schedule email.';
-  
-  ui.alert('Email Recipients List', report, ui.ButtonSet.OK);
+  ui.alert('Email Recipients', report, ui.ButtonSet.OK);
 }
 
 /**
@@ -12977,7 +14324,6 @@ function bulkAddEmailRecipients() {
     }
   }
 }
-
 /**
  * Preview the color scheme for houses and vendors
  */
@@ -13722,7 +15068,6 @@ Need the calendar links? Check the VENDOR_CALENDAR_LINKS sheet!
     ui.ButtonSet.OK
   );
 }
-
 /**
  * Setup enhanced trigger for Monday emails
  */
@@ -14491,9 +15836,7 @@ function deployWebApp() {
   
   ui.showModalDialog(htmlOutput, 'Web App Deployment Guide');
 }
-
 // ======================== DEPLOYMENT INSTRUCTIONS ========================
-
 /*
  * GOOGLE APPS SCRIPT WEB APP DEPLOYMENT GUIDE
  * ==========================================
