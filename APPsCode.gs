@@ -54,246 +54,114 @@ function sendWeeklyEmailsToDistributionLists() {
     ui.alert('Error', 'No schedule found. Please generate a schedule first.', ui.ButtonSet.OK);
     return;
   }
+
+  // Your 3 distribution lists
+  const distributionLists = [
+    'Estates_CA@familyfirstas.com',
+    'Nest_CA@familyfirstas.com',
+    'Cove_CA@familyfirstas.com'
+  ];
   
-  // Show dialog to select week and confirm recipients
-  showEmailSelectionDialog();
+  // Get the week to send
+  const weekStart = getThisMonday();
+  
+  // Store the selected week temporarily for the email generation
+  PropertiesService.getScriptProperties().setProperty('TEMP_EMAIL_WEEK', weekStart.toISOString());
+  
+  try {
+    const subject = `Family First - Weekly Schedule (Week of ${Utilities.formatDate(weekStart, CONFIG.DEFAULT_TIMEZONE, 'MMM d, yyyy')})`;
+    const htmlBody = createWeeklyScheduleHtml(); // This will use the TEMP_EMAIL_WEEK
+    const plainBody = 'Please view this email in HTML format to see the schedule.';
+    
+    // Send to each distribution list
+    let successCount = 0;
+    distributionLists.forEach(email => {
+      try {
+        sendEmailSafely(email, subject, plainBody, htmlBody, {
+          type: 'weekly_schedule',
+          duplicateWindowMs: 24 * 60 * 60 * 1000
+        });
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to send to ${email}:`, error);
+      }
+    });
+    
+    // Clear the temporary week
+    PropertiesService.getScriptProperties().deleteProperty('TEMP_EMAIL_WEEK');
+    
+    ui.alert(
+      '✅ Success',
+      `Weekly schedule for ${Utilities.formatDate(weekStart, CONFIG.DEFAULT_TIMEZONE, 'MMM d')} has been sent to ${successCount} distribution lists.`,
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    PropertiesService.getScriptProperties().deleteProperty('TEMP_EMAIL_WEEK');
+    throw error;
+  }
 }
 
 /**
- * Show dialog for selecting week and confirming recipients
+ * Helper function to get the Monday of a given week
+ * @param {Date} date - The date to get the Monday for
+ * @returns {Date} The Monday of that week
  */
-function showEmailSelectionDialog() {
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { 
-          font-family: 'Segoe UI', Arial, sans-serif; 
-          padding: 20px;
-          background: #f5f5f5;
-        }
-        h2 { 
-          color: #1976d2; 
-          margin-bottom: 20px;
-        }
-        .section {
-          background: white;
-          padding: 20px;
-          border-radius: 8px;
-          margin-bottom: 20px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .section h3 {
-          color: #1565c0;
-          margin-top: 0;
-        }
-        .week-selector {
-          padding: 10px;
-          background: #f8f9fa;
-          border-radius: 6px;
-          margin: 10px 0;
-        }
-        .week-option {
-          padding: 10px;
-          margin: 5px 0;
-          border: 2px solid #e0e0e0;
-          border-radius: 4px;
-          cursor: pointer;
-          transition: all 0.3s;
-        }
-        .week-option:hover {
-          border-color: #1976d2;
-          background: #e3f2fd;
-        }
-        .week-option.selected {
-          border-color: #1976d2;
-          background: #e3f2fd;
-        }
-        .recipients-list {
-          background: #f5f5f5;
-          padding: 15px;
-          border-radius: 4px;
-          margin: 10px 0;
-        }
-        .recipient-item {
-          padding: 8px;
-          margin: 5px 0;
-          background: white;
-          border-left: 3px solid #1976d2;
-          border-radius: 2px;
-        }
-        button {
-          background: #1976d2;
-          color: white;
-          border: none;
-          padding: 12px 30px;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 16px;
-          margin: 5px;
-        }
-        button:hover {
-          background: #1565c0;
-        }
-        button.secondary {
-          background: #757575;
-        }
-        button.secondary:hover {
-          background: #616161;
-        }
-        .status {
-          padding: 10px;
-          margin: 10px 0;
-          border-radius: 4px;
-          display: none;
-        }
-        .status.success {
-          background: #c8e6c9;
-          color: #2e7d32;
-        }
-        .status.error {
-          background: #ffcdd2;
-          color: #c62828;
-        }
-      </style>
-    </head>
-    <body>
-      <h2>📧 Send Weekly Schedule Email</h2>
-      
-      <div class="section">
-        <h3>📅 Step 1: Select Week</h3>
-        <div class="week-selector" id="weekSelector">
-          <div class="week-option" data-week="current" onclick="selectWeek('current')">
-            📍 Current Week (This Week)
-          </div>
-          <div class="week-option" data-week="next" onclick="selectWeek('next')">
-            ⏭️ Next Week
-          </div>
-          <div class="week-option" data-week="specific" onclick="selectWeek('specific')">
-            📆 Select Specific Date
-            <input type="date" id="specificDate" style="margin-left: 10px; padding: 5px;">
-          </div>
-        </div>
-        <div id="selectedWeekInfo" style="margin-top: 10px; font-weight: bold; color: #1976d2;"></div>
-      </div>
-      
-      <div class="section">
-        <h3>✉️ Step 2: Confirm Recipients</h3>
-        <p>The schedule will be sent to these distribution lists:</p>
-        <div class="recipients-list">
-          <div class="recipient-item">📧 Estates_CA@familyfirstas.com</div>
-          <div class="recipient-item">📧 Nest_CA@familyfirstas.com</div>
-          <div class="recipient-item">📧 Cove_CA@familyfirstas.com</div>
-        </div>
-        <p style="color: #666; font-size: 14px;">
-          💡 These distribution lists include all program coordinators and relevant staff
-        </p>
-      </div>
-      
-      <div class="section">
-        <h3>📋 Step 3: Preview & Confirm</h3>
-        <div id="confirmationArea" style="background: #e8f5e9; padding: 15px; border-radius: 4px; border: 2px solid #4CAF50;">
-          <h4 style="margin-top: 0; color: #2e7d32;">You will send:</h4>
-          <div id="weekConfirmation" style="font-size: 16px; margin: 10px 0; font-weight: bold; color: #1976d2;">
-            <!-- This will be filled by JavaScript -->
-          </div>
-          
-          <div id="schedulePreview" style="margin-top: 5px; padding: 10px; background: #fafafa; border: 1px solid #ddd; border-radius: 4px; font-family: Menlo,Consolas,monospace; white-space: pre-wrap; line-height:1.4; font-size: 13px; min-height:40px;">
-             <!-- Schedule will appear here -->
-           </div>
-        </div>
-      </div>
-      
-      <div id="status" class="status"></div>
-      
-      <div style="text-align: center; margin-top: 20px;">
-        <button onclick="sendEmails()">📨 Send Emails</button>
-        <button class="secondary" onclick="google.script.host.close()">Cancel</button>
-      </div>
-      
-      <script>
-        let selectedWeek = 'current';
-        
-        function getMonday(d) {
-          d = new Date(d);
-          var day = d.getDay(),
-              diff = d.getDate() - day + (day == 0 ? -6 : 1);
-          return new Date(d.setDate(diff));
-        }
-        
-        function formatDateRange(monday) {
-          const sunday = new Date(monday);
-          sunday.setDate(sunday.getDate() + 6);
-          
-          const options = { month: 'short', day: 'numeric', year: 'numeric' };
-          const mondayStr = monday.toLocaleDateString('en-US', options);
-          const sundayStr = sunday.toLocaleDateString('en-US', options);
-          
-          return mondayStr + ' - ' + sundayStr;
-        }
-        
-        function selectWeek(week) {
-          selectedWeek = week;
-          
-          // Update UI
-          document.querySelectorAll('.week-option').forEach(el => {
-            el.classList.remove('selected');
-          });
-          document.querySelector('[data-week="' + week + '"]').classList.add('selected');
-          
-          // Calculate the actual dates
-          let targetDate = new Date();
-          let confirmText = '';
-          
-          if (week === 'current') {
-            const monday = getMonday(targetDate);
-            confirmText = '📅 <span style="color: #1976d2;">THIS WEEK\'s Schedule</span><br>' +
-                         '📆 Week of: <strong>' + formatDateRange(monday) + '</strong>';
-          } else if (week === 'next') {
-            targetDate.setDate(targetDate.getDate() + 7);
-            const monday = getMonday(targetDate);
-            confirmText = '📅 <span style="color: #f57c00;">NEXT WEEK\'s Schedule</span><br>' +
-                         '📆 Week of: <strong>' + formatDateRange(monday) + '</strong>';
-          } else if (week === 'specific') {
-            const dateInput = document.getElementById('specificDate');
-            if (dateInput.value) {
-              const selectedDate = new Date(dateInput.value);
-              const monday = getMonday(selectedDate);
-              confirmText = '📅 <span style="color: #7b1fa2;">SPECIFIC WEEK\'s Schedule</span><br>' +
-                           '📆 Week of: <strong>' + formatDateRange(monday) + '</strong>';
-            } else {
-              confirmText = '⚠️ Please select a date above';
-            }
-          }
-          
-          document.getElementById('weekConfirmation').innerHTML = confirmText;
-          document.getElementById('selectedWeekInfo').innerHTML = confirmText.replace('<br>', ' - ');
-          // Auto refresh preview when week changes
-          loadCompactPreview();
-        }
-        
-        // Update when date changes
-        document.addEventListener('DOMContentLoaded', function() {
-          const dateInput = document.getElementById('specificDate');
-          if (dateInput) {
-            dateInput.addEventListener('change', function() {
-              if (selectedWeek === 'specific') {
-                selectWeek('specific');
-              }
-            });
-          }
-          // Auto-select current week and render initial preview
-          selectWeek('current');
-        });
-        
-        function loadCompactPreview() {
-          const preview = document.getElementById('schedulePreview');
-          preview.innerHTML = '<div style="text-align: center; color: #666;">Loading schedule...</div>';
-          
-          let weekDate = null;
-          if (selectedWeek === 'specific') {
-            weekDate = document.getElementById('specificDate').value;
+function getWeekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+}
+
+/**
+ * Gets the Monday of the current week
+ */
+function getThisMonday() {
+  const today = new Date();
+  const day = today.getDay();
+  const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(today.setDate(diff));
+}
+
+function getTargetMonday(weekType, specificDate = null) {
+  let targetDate = new Date();
+  
+  if (weekType === 'next') {
+    targetDate.setDate(targetDate.getDate() + 7);
+  } else if (weekType === 'specific' && specificDate) {
+    targetDate = new Date(specificDate);
+  }
+  
+  const day = targetDate.getDay();
+  const diff = targetDate.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(targetDate.setDate(diff));
+}
+
+function formatScheduleConfirmation(weekType, monday) {
+  switch (weekType) {
+    case 'current':
+      return {
+        text: '📅 THIS WEEK\'s Schedule - ' + formatDateRange(monday),
+        html: '📅 <span style="color: #1976d2;">THIS WEEK\'s Schedule</span><br>📆 Week of: <strong>' + formatDateRange(monday) + '</strong>'
+      };
+    case 'next':
+      return {
+        text: '📅 NEXT WEEK\'s Schedule - ' + formatDateRange(monday),
+        html: '📅 <span style="color: #f57c00;">NEXT WEEK\'s Schedule</span><br>📆 Week of: <strong>' + formatDateRange(monday) + '</strong>'
+      };
+    case 'specific':
+      return {
+        text: '📅 SPECIFIC WEEK\'s Schedule - ' + formatDateRange(monday),
+        html: '📅 <span style="color: #7b1fa2;">SPECIFIC WEEK\'s Schedule</span><br>📆 Week of: <strong>' + formatDateRange(monday) + '</strong>'
+      };
+    default:
+      return {
+        text: '⚠️ Please select a valid week',
+        html: '⚠️ Please select a valid week'
+      };
+  }
+}
           }
           
           google.script.run
@@ -332,7 +200,7 @@ function showEmailSelectionDialog() {
               status.className = 'status error';
               status.textContent = '❌ Error: ' + error.toString();
             })
-            .processWeeklyEmailSend(selectedWeek, weekDate);
+            // Email sending is now handled by sendWeeklyEmailsToDistributionLists
         }
         
         // Select current week by default
@@ -354,7 +222,7 @@ function showEmailSelectionDialog() {
 /**
  * Process the weekly email send with selected week
  */
-function processWeeklyEmailSend(weekSelection, specificDate) {
+// Email sending is now handled by sendWeeklyEmailsToDistributionLists
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const scheduleSheet = ss.getSheetByName('SCHEDULE');
   
@@ -410,158 +278,12 @@ function processWeeklyEmailSend(weekSelection, specificDate) {
 }
 
 /**
- * DEPRECATED - No longer needed with 3 distribution lists
- * Keeping for backward compatibility only
+ * Email sending is now handled automatically through distribution lists:
+ * - Estates_CA@familyfirstas.com
+ * - Nest_CA@familyfirstas.com
+ * - Cove_CA@familyfirstas.com
  */
-function showDualEmailDialog() {
-  SpreadsheetApp.getUi().alert(
-    'Function Updated',
-    'This function has been replaced.\n\n' +
-    'Please use "Send Weekly Emails" which sends to the 3 distribution lists:\n' +
-    '• Estates_CA@familyfirstas.com\n' +
-    '• Nest_CA@familyfirstas.com\n' +
-    '• Cove_CA@familyfirstas.com',
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
-  return;
-}
-
-/**
- * DEPRECATED - Original dual email dialog code
- * Kept for reference but no longer used
- */
-function showDualEmailDialog_DEPRECATED() {
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 20px; }
-          h2 { color: #1a73e8; }
-          .section { 
-            margin: 20px 0; 
-            padding: 15px; 
-            border: 1px solid #e0e0e0; 
-            border-radius: 8px;
-            background: #f8f9fa;
-          }
-          .section h3 { margin-top: 0; color: #1976d2; }
-          textarea { 
-            width: 100%; 
-            min-height: 100px; 
-            padding: 10px; 
-            border: 1px solid #dadce0; 
-            border-radius: 4px;
-            font-family: Arial, sans-serif;
-            resize: vertical;
-          }
-          input[type="text"] {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #dadce0;
-            border-radius: 4px;
-            margin: 5px 0;
-          }
-          button { 
-            background: #1a73e8; 
-            color: white; 
-            border: none; 
-            padding: 10px 20px; 
-            border-radius: 4px; 
-            cursor: pointer; 
-            margin: 5px;
-            font-size: 14px;
-          }
-          button:hover { background: #1557b0; }
-          button.secondary { background: #5f6368; }
-          button.secondary:hover { background: #3c4043; }
-          .recipient-group { 
-            margin: 10px 0; 
-            padding: 10px; 
-            background: white; 
-            border-radius: 4px; 
-          }
-          .help-text { 
-            font-size: 12px; 
-            color: #5f6368; 
-            margin: 5px 0; 
-          }
-          .status { 
-            padding: 10px; 
-            margin: 10px 0; 
-            border-radius: 4px; 
-            display: none; 
-          }
-          .status.success { background: #e6f4ea; color: #137333; }
-          .status.error { background: #fce8e6; color: #c5221f; }
-          .house-list { 
-            max-height: 200px; 
-            overflow-y: auto; 
-            border: 1px solid #e0e0e0; 
-            padding: 10px; 
-            background: white; 
-          }
-          .house-item { 
-            margin: 5px 0; 
-            padding: 5px; 
-            background: #f8f9fa; 
-            border-radius: 4px; 
-          }
-        </style>
-      </head>
-      <body>
-  <h2>[Email] Send Dual Weekly Emails</h2>
-        
-        <div class="section">
-          <h3>[List] Full Schedule Recipients (Program Coordinators)</h3>
-          <p class="help-text">Enter email addresses for people who need to see the COMPLETE schedule (all houses)</p>
-          <textarea id="pcEmails" placeholder="Enter emails separated by commas or new lines
-Example:
-pc1@familyfirstas.com
-pc2@familyfirstas.com"></textarea>
-          <button onclick="loadSavedPCs()">Load Saved PCs</button>
-          <button class="secondary" onclick="savePCs()">Save These PCs</button>
-        </div>
-        
-        <div class="section">
-          <h3>[House] House-Specific Recipients (BHTs & Clinical Staff)</h3>
-          <p class="help-text">Each house can have its own email list. BHTs will only see their house's schedule.</p>
-          <div id="houseRecipients" class="house-list">
-            <!-- Will be populated with houses -->
-          </div>
-        </div>
-        
-        <div class="status" id="status"></div>
-        
-        <div style="text-align: center; margin-top: 20px;">
-          <button onclick="sendEmails()">📨 Send Both Email Types</button>
-          <button class="secondary" onclick="google.script.host.close()">Cancel</button>
-        </div>
-        
-        <script>
-          // Load houses on startup
-          google.script.run
-            .withSuccessHandler(loadHouses)
-            .withFailureHandler(showError)
-            .getHousesForEmailSetup();
-          
-          // Load saved PC emails
-          google.script.run
-            .withSuccessHandler(function(emails) {
-              if (emails) document.getElementById('pcEmails').value = emails.join('\\n');
-            })
-            .getSavedPCEmails();
-          
-          function loadHouses(houses) {
-            const container = document.getElementById('houseRecipients');
-            container.innerHTML = houses.map(house => \`
-              <div class="house-item">
-                <strong>\${house}</strong><br>
-                <input type="text" 
-                       id="house_\${house}" 
-                       placeholder="Enter emails for \${house} staff (comma-separated)"
-                       value="">
-                <div class="help-text">Example: \${house.toLowerCase()}-bht@familyfirstas.com, \${house.toLowerCase()}-clinical@familyfirstas.com</div>
+// Distribution list emails are now handled automatically
               </div>
             \`).join('');
             
@@ -783,49 +505,35 @@ function processDualEmails(pcEmails, houseRecipients) {
   
   return message;
 }
+
 /**
  * Create house-specific email HTML
  */
 function createHouseSpecificEmail(house, scheduleData, houseCol) {
-  const primaryColor = '#1976d2';  // Material Blue
-  const accentColor = '#42a5f5';   // Light Blue
-
   let html = `
     <!DOCTYPE html>
-    <html lang="en">
+    <html>
     <head>
       <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta charset="UTF-8">
       <title>${house} - Weekly Outing Schedule</title>
       <style>
         body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+          font-family: Arial, sans-serif;
           line-height: 1.6;
-          color: #2c3e50;
-          max-width: 900px;
-          margin: 0 auto;
+          margin: 0;
           padding: 20px;
-          background: #f5f7fa;
         }
         .container {
-          background: white;
-          border-radius: 16px;
-          box-shadow: 0 20px 40px rgba(0,0,0,0.08);
-          overflow: hidden;
-          border: 1px solid #e9ecef;
+          max-width: 800px;
+          margin: 0 auto;
         }
         .header {
-          background: linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 50%, #64b5f6 100%);
-          padding: 50px 30px;
+          background: #1976d2;
+          color: white;
+          padding: 20px;
           text-align: center;
-          position: relative;
-          overflow: hidden;
         }
-        .header::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
           right: 0;
           bottom: 0;
           background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="header-pattern" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="rgba(255,255,255,0.15)"/></pattern></defs><rect width="100" height="100" fill="url(%23header-pattern)"/></svg>');
@@ -838,47 +546,29 @@ function createHouseSpecificEmail(house, scheduleData, houseCol) {
           color: white;
           padding: 30px;
           border-radius: 10px;
-          text-align: center;
-          margin-bottom: 30px;
+          margin-bottom: 20px;
         }
         .header h1 {
           margin: 0;
-          font-size: 28px;
+          font-size: 24px;
         }
         .header p {
-          margin: 10px 0 0 0;
-          opacity: 0.9;
+          margin: 10px 0 0;
         }
         .content {
-          background: #f8f9fa;
-          padding: 25px;
-          border-radius: 8px;
-          margin-bottom: 20px;
-        }
-        .house-badge {
-          display: inline-block;
-          background: ${accentColor};
-          color: white;
-          padding: 8px 16px;
-          border-radius: 20px;
-          font-weight: bold;
-          margin-bottom: 20px;
+          padding: 20px;
         }
         table {
           width: 100%;
           border-collapse: collapse;
-          background: white;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-          border-radius: 12px;
-          overflow: hidden;
           margin: 20px 0;
+          background: white;
         }
         th {
-          background: linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%);
+          background: #1976d2;
           color: white;
-          padding: 20px 18px;
+          padding: 12px;
           text-align: left;
-          font-weight: 600;
           font-size: 15px;
           letter-spacing: 0.5px;
         }
@@ -896,47 +586,28 @@ function createHouseSpecificEmail(house, scheduleData, houseCol) {
         .outing-details {
           font-weight: 600;
           color: #1976d2;
-          font-size: 16px;
-        }
-        .time {
-          color: #64748b;
           font-size: 14px;
-          font-weight: 500;
+        }
+        td {
+          padding: 10px;
+          border-bottom: 1px solid #e0e0e0;
         }
         .footer {
           text-align: center;
-          color: #64748b;
-          font-size: 13px;
-          margin-top: 40px;
-          padding-top: 25px;
-          border-top: 2px solid #e2e8f0;
-        }
-        .highlight-box {
-          background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-          border-left: 4px solid #1976d2;
-          padding: 25px;
-          margin: 25px 0;
-          border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(25, 118, 210, 0.1);
+          color: #666;
+          font-size: 12px;
+          margin-top: 20px;
+          padding-top: 20px;
+          border-top: 1px solid #e0e0e0;
         }
       </style>
     </head>
     <body>
       <div class="container">
-        <div class="header" style="padding: 25px 20px;">
-          <div class="header-content">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 20px;">
-              <div style="width: 60px; height: 60px; background: white; border-radius: 50%; box-shadow: 0 4px 12px rgba(0,0,0,0.15); overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center;">
-                <img src="https://familyfirstas.com/wp-content/uploads/2023/10/family-first-favicon-logo-512x512-1.png" alt="Family First Logo" style="width: 38px; height: 38px; display: block; object-fit: contain; object-position: center center; margin: auto;" />
-              </div>
-              <div style="text-align: left;">
-                <h1 style="color: white; margin: 0; font-size: 26px; font-weight: 500; letter-spacing: 0.5px;">Family First Adolescent Services</h1>
-                <p style="color: #e8f4fd; margin: 4px 0 0 0; font-size: 15px;">Therapeutic Outings Schedule</p>
-              </div>
-            </div>
-            <div style="background: rgba(255,255,255,0.95); color: #1976d2; padding: 12px 28px; border-radius: 25px; display: inline-block; font-weight: 700; box-shadow: 0 6px 20px rgba(0,0,0,0.2); font-size: 22px; letter-spacing: 0.5px; text-transform: uppercase;">
-              ${house} House
-            </div>
+        <div class="header">
+          <h1>Family First Adolescent Services</h1>
+          <p>Therapeutic Outings Schedule</p>
+          <h2>${house} House</h2>
           </div>
         </div>
 
@@ -1120,7 +791,7 @@ function getPCContactForHouse(houseName) {
   if (pcInfo) {
     return `${pcInfo.name} - ${pcInfo.phone}`;
   }
-  return `Main Office - ${CONFIG.MAIN_CONTACT_PHONE || '(561) 555-0123'}`;
+  return `Christopher Molina - ${CONFIG.MAIN_CONTACT_PHONE || '(561) 703-4864'} - ${CONFIG.DIRECTOR_EMAIL || 'cmolina@familyfirstas.com'}`;
 }
 
 /**
@@ -1470,6 +1141,31 @@ function getNextDayOfWeek(fromDate, dayName) {
  * Format vendor event description
  */
 function formatVendorEventDescription(vendor, day, houses) {
+  // Get PC contacts for the participating houses
+  let pcContacts = '';
+  if (houses && houses !== 'All Houses') {
+    const houseList = houses.split(', ');
+    const uniquePCs = new Map();
+    
+    houseList.forEach(house => {
+      const pcInfo = CONFIG.PC_CONTACTS[house];
+      if (pcInfo) {
+        uniquePCs.set(pcInfo.name, pcInfo);
+      }
+    });
+    
+    if (uniquePCs.size > 0) {
+      pcContacts = Array.from(uniquePCs.values())
+        .map(pc => `• ${pc.name}: ${pc.phone}`)
+        .join('\n');
+    }
+  }
+  
+  // Use default contact if no specific PCs found
+  if (!pcContacts) {
+    pcContacts = `• Christopher Molina (Director): ${CONFIG.MAIN_CONTACT_PHONE || '(561) 703-4864'} | Email: ${CONFIG.DIRECTOR_EMAIL || 'cmolina@familyfirstas.com'}`;
+  }
+  
   return `📍 Family First Therapeutic Outing
 🏠 Participating Houses: ${houses || 'All Houses'}
 👥 Expected Clients: ~15-20
@@ -1479,9 +1175,10 @@ function formatVendorEventDescription(vendor, day, houses) {
 • Duration: 2 hours
 • Day: ${day}
 
-☎️ Contact Information:
-• Program Coordinator: (XXX) XXX-XXXX
-• Email: coordinator@familyfirstas.com
+☎️ Program Coordinator Contact(s):
+${pcContacts}
+• Director Email: ${CONFIG.DIRECTOR_EMAIL || 'cmolina@familyfirstas.com'}
+• Scheduling Email: ${CONFIG.MAIN_CONTACT_EMAIL}
 
 ⚠️ Important Notes:
 • Please have facilities ready 15 minutes before arrival
@@ -1734,6 +1431,10 @@ function createVendorScheduleView(vendorName) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const scheduleSheet = ss.getSheetByName('Schedule');
   
+  if (!scheduleSheet) {
+    throw new Error('Schedule sheet not found');
+  }
+  
   // Create or get vendor-specific sheet
   let vendorSheet = ss.getSheetByName(`${vendorName} Schedule`);
   if (!vendorSheet) {
@@ -1743,105 +1444,311 @@ function createVendorScheduleView(vendorName) {
   // Clear existing content
   vendorSheet.clear();
   
-  // Add header
-  vendorSheet.getRange(1, 1, 1, 5).setValues([
-    ['Date', 'Day', 'Time', 'Houses', 'Notes']
-  ]);
-  vendorSheet.getRange(1, 1, 1, 5).setFontWeight('bold').setBackground('#1976d2').setFontColor('#ffffff');
+  // Add title and header
+  vendorSheet.getRange(1, 1).setValue(`${vendorName} - Therapeutic Outings Schedule`);
+  vendorSheet.getRange(1, 1, 1, 6).merge().setFontSize(18).setFontWeight('bold').setHorizontalAlignment('center');
   
-  // Extract vendor's schedule from main schedule
+  vendorSheet.getRange(2, 1).setValue(`Generated: ${new Date().toLocaleDateString()}`);
+  vendorSheet.getRange(2, 1, 1, 6).merge().setFontSize(12).setHorizontalAlignment('center');
+  
+  // Add contact info
+  const contactInfo = `Director Contact: Christopher Molina - ${CONFIG.MAIN_CONTACT_PHONE} | Email: ${CONFIG.MAIN_CONTACT_EMAIL}`;
+  vendorSheet.getRange(3, 1).setValue(contactInfo);
+  vendorSheet.getRange(3, 1, 1, 6).merge().setFontSize(11).setHorizontalAlignment('center').setBackground('#e8f5e9');
+  
+  // Add header row
+  vendorSheet.getRange(5, 1, 1, 6).setValues([
+    ['Date', 'Day', 'Time', 'House(s)', 'PC Contact', 'PC Phone']
+  ]);
+  vendorSheet.getRange(5, 1, 1, 6).setFontWeight('bold').setBackground('#1976d2').setFontColor('#ffffff');
+  
+  // Get schedule data
   const data = scheduleSheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  // Find date column and house columns
+  const dateIndex = headers.findIndex(h => h.toString().toLowerCase().includes('date'));
+  const optionsIndex = headers.findIndex(h => h.toString().toLowerCase().includes('options'));
+  
+  const startIndex = dateIndex >= 0 ? dateIndex + 1 : 1;
+  const endIndex = optionsIndex >= 0 ? optionsIndex : headers.length;
+  
+  // Get house columns
+  const houseColumns = [];
+  const houseIndexes = [];
+  for (let i = startIndex; i < endIndex; i++) {
+    const header = headers[i];
+    if (header && header.toString().trim() !== '' && 
+        header.toString().toLowerCase() !== 'true' && 
+        header.toString().toLowerCase() !== 'false' &&
+        !header.toString().toLowerCase().includes('option')) {
+      houseColumns.push(header);
+      houseIndexes.push(i);
+    }
+  }
+  
+  // Extract vendor's schedule
   const vendorSchedule = [];
   
-  // Parse schedule for this vendor
-  for (let row = 0; row < data.length; row++) {
-    for (let col = 0; col < data[row].length; col++) {
-      const cell = String(data[row][col]);
-      if (cell.includes(vendorName)) {
-        // Found vendor, extract details
-        const dayCell = data[Math.max(0, row - 1)][col];
-        const dateInfo = extractDateFromPosition(row, col, data);
+  // Start from row 1 (skip headers)
+  for (let row = 1; row < data.length; row++) {
+    const dateCell = data[row][dateIndex];
+    if (!dateCell) continue;
+    
+    const date = new Date(dateCell);
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+    const dateFormatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    
+    // Check each house column for this vendor
+    for (let i = 0; i < houseColumns.length; i++) {
+      const house = houseColumns[i];
+      const cellData = data[row][houseIndexes[i]];
+      
+      if (cellData && cellData.toString().includes(vendorName)) {
+        const parts = cellData.toString().split('\n');
+        const time = parts[1] || '2:00 PM';
         
-        if (dayCell && dateInfo) {
-          const lines = cell.split('\n');
-          const time = lines[1] || '2:00 PM';
-          const houses = lines.slice(2).join(', ');
-          
-          vendorSchedule.push([
-            dateInfo.date,
-            dayCell,
-            time,
-            houses,
-            'Family First Outing'
-          ]);
-        }
+        // Get PC contact for this house
+        const pcInfo = CONFIG.PC_CONTACTS[house];
+        const pcName = pcInfo ? pcInfo.name : 'Christopher Molina';
+        const pcPhone = pcInfo ? pcInfo.phone : CONFIG.MAIN_CONTACT_PHONE;
+        
+        vendorSchedule.push([
+          dateFormatted,
+          dayName,
+          time,
+          house,
+          pcName,
+          pcPhone
+        ]);
       }
     }
   }
   
+  // Sort by date
+  vendorSchedule.sort((a, b) => new Date(a[0]) - new Date(b[0]));
+  
   // Add schedule to sheet
   if (vendorSchedule.length > 0) {
-    vendorSheet.getRange(2, 1, vendorSchedule.length, 5).setValues(vendorSchedule);
+    vendorSheet.getRange(6, 1, vendorSchedule.length, 6).setValues(vendorSchedule);
+    
+    // Format data rows
+    vendorSheet.getRange(6, 1, vendorSchedule.length, 6).setBorder(true, true, true, true, true, true);
+    
+    // Alternate row colors
+    for (let i = 0; i < vendorSchedule.length; i++) {
+      if (i % 2 === 0) {
+        vendorSheet.getRange(6 + i, 1, 1, 6).setBackground('#f5f5f5');
+      }
+    }
+  } else {
+    vendorSheet.getRange(6, 1).setValue('No outings scheduled for this vendor');
+    vendorSheet.getRange(6, 1, 1, 6).merge().setHorizontalAlignment('center').setFontStyle('italic');
   }
   
-  // Format the sheet
-  vendorSheet.autoResizeColumns(1, 5);
-  vendorSheet.setFrozenRows(1);
+  // Add summary
+  const summaryRow = 6 + vendorSchedule.length + 2;
+  vendorSheet.getRange(summaryRow, 1).setValue(`Total Outings: ${vendorSchedule.length}`);
+  vendorSheet.getRange(summaryRow, 1, 1, 6).merge().setFontWeight('bold').setBackground('#e3f2fd');
   
-  // Generate PDF URL for this specific vendor
-  const pdfUrl = `https://docs.google.com/spreadsheets/d/${ss.getId()}/export?` +
-    `format=pdf&` +
-    `gid=${vendorSheet.getSheetId()}&` +
-    `portrait=true&` +
-    `fitw=true&` +
-    `gridlines=true&` +
-    `printtitle=true&` +
-    `sheetnames=false&` +
-    `pagenum=RIGHT&` +
-    `attachment=true&` +
-    `filename=${encodeURIComponent(vendorName)}_Schedule_${new Date().getFullYear()}.pdf`;
+  // Format the sheet
+  vendorSheet.autoResizeColumns(1, 6);
+  vendorSheet.setFrozenRows(5);
+  
+  // Generate shareable URL for this vendor sheet
+  const shareableUrl = `https://docs.google.com/spreadsheets/d/${ss.getId()}/edit#gid=${vendorSheet.getSheetId()}`;
   
   return {
     sheet: vendorSheet,
-    pdfUrl: pdfUrl
+    url: shareableUrl,
+    vendorName: vendorName,
+    outingCount: vendorSchedule.length
   };
 }
 
 /**
  * Create individual vendor schedule views
  */
-function createAllVendorViews() {
+function createAllVendorSchedules() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
   try {
-    const vendorSheet = ss.getSheetByName('Vendor Calendar Links');
-    if (!vendorSheet) {
-      ui.alert('Error', 'Please set up vendor calendars first.', ui.ButtonSet.OK);
-      return;
-    }
+    // Show progress
+    const progressHtml = HtmlService.createHtmlOutput(`
+      <div style="font-family: Arial, sans-serif; padding: 20px; text-align: center;">
+        <h3>Creating Vendor Schedules...</h3>
+        <p>Please wait while we generate individual schedules for each vendor.</p>
+        <div style="margin: 20px auto; width: 200px; height: 20px; background: #e0e0e0; border-radius: 10px;">
+          <div style="width: 50%; height: 100%; background: #1976d2; border-radius: 10px; animation: progress 2s ease-in-out infinite;"></div>
+        </div>
+        <style>
+          @keyframes progress {
+            0% { width: 0%; }
+            50% { width: 100%; }
+            100% { width: 0%; }
+          }
+        </style>
+      </div>
+    `)
+    .setWidth(400)
+    .setHeight(200);
     
-    const vendors = [];
-    const data = vendorSheet.getDataRange().getValues();
+    ui.showModalDialog(progressHtml, 'Generating Vendor Schedules');
     
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0]) vendors.push(data[i][0]);
-    }
+    // Get unique vendors from the schedule
+    const dataManager = new DataManager(ss);
+    const vendors = dataManager.getVendors();
+    const vendorNames = Object.keys(vendors);
     
-    // Create view for each vendor
-    vendors.forEach(vendor => {
-      createVendorScheduleView(vendor);
+    const results = [];
+    const errors = [];
+    
+    // Create schedule for each vendor
+    vendorNames.forEach(vendorName => {
+      try {
+        const result = createVendorScheduleView(vendorName);
+        results.push(result);
+      } catch (error) {
+        errors.push({vendor: vendorName, error: error.toString()});
+      }
     });
     
+    // Close progress dialog
+    const closeScript = HtmlService.createHtmlOutput('<script>google.script.host.close();</script>');
+    ui.showModalDialog(closeScript, 'Closing...');
+    
+    // Show results
+    showVendorScheduleResults(results, errors);
+    
+  } catch (error) {
+    ui.alert('Error', `Failed to create vendor schedules: ${error.toString()}`, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Show results of vendor schedule creation
+ */
+function showVendorScheduleResults(results, errors) {
+  const ui = SpreadsheetApp.getUi();
+  
+  let html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px;">
+      <h2 style="color: #1976d2;">📅 Vendor Schedule Generation Complete</h2>
+      
+      <div style="background: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; padding: 15px; margin: 20px 0;">
+        <p style="margin: 0; font-size: 16px;">✅ Successfully created ${results.length} vendor schedules</p>
+      </div>
+      
+      <h3>Individual Vendor Schedules:</h3>
+      <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px; padding: 10px;">
+  `;
+  
+  results.forEach(result => {
+    html += `
+      <div style="margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong style="color: #1976d2;">${result.vendorName}</strong>
+            <br>
+            <span style="color: #666; font-size: 14px;">${result.outingCount} outings scheduled</span>
+          </div>
+          <div>
+            <button onclick="window.open('${result.url}', '_blank')" 
+                    style="padding: 6px 12px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer;">
+              View Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+  
+  html += `</div>`;
+  
+  if (errors.length > 0) {
+    html += `
+      <div style="background: #ffebee; border: 1px solid #f44336; border-radius: 8px; padding: 15px; margin: 20px 0;">
+        <p style="margin: 0; color: #d32f2f;"><strong>⚠️ Errors (${errors.length}):</strong></p>
+        <ul style="margin: 10px 0 0 20px; color: #d32f2f;">
+    `;
+    errors.forEach(error => {
+      html += `<li>${error.vendor}: ${error.error}</li>`;
+    });
+    html += `</ul></div>`;
+  }
+  
+  html += `
+      <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; padding: 15px; margin: 20px 0;">
+        <h4 style="margin-top: 0; color: #1565c0;">📧 Sharing Vendor Schedules:</h4>
+        <ol style="margin: 10px 0 0 20px;">
+          <li>Click "View Schedule" for the vendor you want to share</li>
+          <li>Click the "Share" button in the top-right corner</li>
+          <li>Set sharing to "Anyone with the link can view"</li>
+          <li>Copy the link and send it to the vendor</li>
+        </ol>
+        <p style="margin: 10px 0 0 0; font-style: italic; color: #666;">
+          Each vendor will only see their own schedule - no other vendor information is visible.
+        </p>
+      </div>
+      
+      <div style="text-align: right; margin-top: 20px;">
+        <button onclick="google.script.host.close()" 
+                style="padding: 8px 16px; background: #757575; color: white; border: none; border-radius: 4px; cursor: pointer;">
+          Close
+        </button>
+      </div>
+    </div>
+  `;
+  
+  const htmlOutput = HtmlService.createHtmlOutput(html)
+    .setWidth(650)
+    .setHeight(600);
+  
+  ui.showModalDialog(htmlOutput, '✅ Vendor Schedules Created');
+}
+
+/**
+ * Create schedule for a specific vendor (menu function)
+ */
+function createSingleVendorSchedule() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // Get vendor name from user
+  const response = ui.prompt(
+    '📅 Create Vendor Schedule',
+    'Enter the vendor name (e.g., "Groovy Goat Farm"):',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (response.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+  
+  const vendorName = response.getResponseText().trim();
+  if (!vendorName) {
+    ui.alert('Error', 'Please enter a vendor name.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  try {
+    const result = createVendorScheduleView(vendorName);
+    
     ui.alert(
-      '✅ Vendor Views Created',
-      `Created individual schedule views for ${vendors.length} vendors.\n\n` +
-      'Each vendor now has their own sheet with their specific schedule.',
+      '✅ Schedule Created',
+      `Successfully created schedule for ${vendorName}!\n\n` +
+      `📊 Total outings: ${result.outingCount}\n` +
+      `📄 Sheet name: "${vendorName} Schedule"\n\n` +
+      `The schedule sheet is now available in this spreadsheet.\n` +
+      `You can share it with the vendor using the Share button.`,
       ui.ButtonSet.OK
     );
     
+    // Navigate to the new sheet
+    result.sheet.activate();
+    
   } catch (error) {
-    ui.alert('Error', `Failed to create views: ${error.message}`, ui.ButtonSet.OK);
+    ui.alert('Error', `Failed to create schedule: ${error.toString()}`, ui.ButtonSet.OK);
   }
 }
 
@@ -2101,8 +2008,8 @@ function testVendorCalendarDisplay() {
 • Shoe rental included
 • Refreshments provided
 
-☎️ Contact: Program Coordinator - (XXX) XXX-XXXX
-📧 Email: coordinator@familyfirstas.com
+☎️ Contact: Christopher Molina (Director) - (561) 703-4864
+📧 Email: ${CONFIG.MAIN_CONTACT_EMAIL}
 
 ⚠️ Important:
 • Please have lanes ready by 1:45 PM
@@ -2254,7 +2161,7 @@ const CONFIG = {
   PERSONAL_DOMAINS: ['@gmail.com', '@yahoo.com', '@hotmail.com', '@outlook.com', '@aol.com'],
   
   // Emergency contact information for vendors
-  MAIN_CONTACT_PHONE: '(561) 555-0123',
+  MAIN_CONTACT_PHONE: '(561) 703-4864', // Christopher Molina - Director of Case Management
   
   // Program Coordinator (PC) contacts by house
   PC_CONTACTS: {
@@ -2266,7 +2173,8 @@ const CONFIG = {
     'Cove': { name: 'Carlos R.', phone: '515-570-2808', houses: ['Cove'] }
   },
   MAIN_CONTACT_EMAIL: 'scheduling@familyfirstas.com',
-  EMERGENCY_CONTACT: '(561) 555-0911',
+  DIRECTOR_EMAIL: 'cmolina@familyfirstas.com', // Christopher Molina - Director of Case Management
+  EMERGENCY_CONTACT: '(561) 703-4864', // Christopher Molina - Director of Case Management
   MAIN_OFFICE_HOURS: 'Monday-Friday: 8:00 AM - 6:00 PM',
   AFTER_HOURS_CONTACT: 'Call main number for on-call coordinator'
 };
@@ -3036,7 +2944,8 @@ function onOpen() {
           .addSeparator()
           .addItem('📋 Generate Access Instructions', 'generateVendorAccessInstructions')
           .addItem('📄 Create PDF Schedules', 'generateVendorPDFSchedules')
-          .addItem('📅 Create Individual Vendor Views', 'createAllVendorViews')
+          .addItem('📅 Create ALL Vendor Schedules', 'createAllVendorSchedules')
+          .addItem('📊 Create Single Vendor Schedule', 'createSingleVendorSchedule')
           .addItem('🔗 Share Calendar Links', 'shareVendorCalendarLinks'));
     
     // Help at the bottom
@@ -3048,6 +2957,7 @@ function onOpen() {
     console.log("onOpen error:", error);
   }
 }
+
 /**
  * First-run initialization and migration
  */
@@ -6826,7 +6736,18 @@ class DataManager {
     }
     
     // Load from sheet
-    const sheet = this.getSheet('VENDORS');
+    let sheet = this.getSheet('VENDORS');
+    if (!sheet) {
+      sheet = this.getSheet('Vendors'); // Try lowercase version
+    }
+    if (!sheet) {
+      // Create the vendors sheet if it doesn't exist
+      sheet = this.ss.insertSheet('VENDORS');
+      sheet.getRange(1, 1, 1, 12).setValues([[
+        'Name', 'Type', 'Capacity', 'Contact', 'Active', 'WeeklyLimit', 
+        'Blackout', 'Color', 'CalendarId', 'QualityScore', 'Preferences', 'Address'
+      ]]);
+    }
     const values = sheet.getDataRange().getValues();
     const vendors = {};
     
@@ -7933,11 +7854,20 @@ function previewAndSendSchedule() {
           const headers = ${JSON.stringify(headers)};
           const dateIndex = ${dateIndex};
           
-          // Find column indexes
-          const houseIndex = headers.findIndex(h => h.toLowerCase() === 'house' || h.toLowerCase() === 'program');
-          const vendorIndex = headers.findIndex(h => h.toLowerCase() === 'vendor');
-          const timeIndex = headers.findIndex(h => h.toLowerCase() === 'time');
-          const activityIndex = headers.findIndex(h => h.toLowerCase() === 'activity' || h.toLowerCase() === 'description');
+          // Get house columns - everything between Date and the options/boolean columns
+          const optionsIndex = headers.findIndex(h => h.toLowerCase().includes('option'));
+          const endColumnIndex = optionsIndex > 0 ? optionsIndex : headers.length;
+          const houseColumns = [];
+          const houseIndexes = [];
+          
+          // Find all house columns (they're between date and options)
+          for (let i = dateIndex + 1; i < endColumnIndex; i++) {
+            const header = headers[i];
+            if (header && header.trim() !== '' && !header.toLowerCase().includes('false') && !header.toLowerCase().includes('true')) {
+              houseColumns.push(header);
+              houseIndexes.push(i);
+            }
+          }
           
           function updatePreview() {
             const weekSelect = document.getElementById('weekSelect');
@@ -7962,9 +7892,11 @@ function previewAndSendSchedule() {
               outingsByDate[dateStr].push(row);
             });
             
+            // Count total outings
+            let totalOutings = 0;
+            
             // Build preview HTML
-            let previewContent = '<div class="summary"><strong>' + weekOutings.length + ' outings scheduled this week</strong></div>';
-            previewContent += '<div class="schedule-preview">';
+            let previewContent = '<div class="schedule-preview">';
             
             // Sort dates and display
             Object.keys(outingsByDate).sort((a, b) => new Date(a) - new Date(b)).forEach(dateStr => {
@@ -7976,18 +7908,28 @@ function previewAndSendSchedule() {
               previewContent += '<div class="date-header">' + dayName + ', ' + dateFormatted + '</div>';
               
               outingsByDate[dateStr].forEach(row => {
-                const house = (houseIndex !== -1 ? row[houseIndex] : row[1]) || 'Unknown';
-                const vendor = (vendorIndex !== -1 ? row[vendorIndex] : row[2]) || 'Unassigned';
-                const time = (timeIndex !== -1 ? row[timeIndex] : row[3]) || '';
-                const activity = (activityIndex !== -1 ? row[activityIndex] : row[4]) || '';
-                
-                previewContent += '<div class="outing">';
-                previewContent += '<span class="house-name">' + house + '</span>';
-                previewContent += ' → ';
-                previewContent += '<span class="vendor-name">' + vendor + '</span>';
-                if (time) previewContent += ' <span class="time">(' + time + ')</span>';
-                if (activity) previewContent += '<br><small>' + activity + '</small>';
-                previewContent += '</div>';
+                // Process each house column
+                for (let i = 0; i < houseColumns.length; i++) {
+                  const house = houseColumns[i];
+                  const cellData = row[houseIndexes[i]];
+                  
+                  if (cellData && cellData.toString().trim() !== '') {
+                    // Parse vendor and time from cell
+                    const lines = cellData.toString().split('\\n');
+                    const vendor = lines[0] || '';
+                    const time = lines[1] || '';
+                    
+                    if (vendor && vendor !== 'TBD' && vendor !== 'UNASSIGNED') {
+                      totalOutings++;
+                      previewContent += '<div class="outing">';
+                      previewContent += '<span class="house-name">' + house + '</span>';
+                      previewContent += ' → ';
+                      previewContent += '<span class="vendor-name">' + vendor + '</span>';
+                      if (time) previewContent += ' <span class="time">(' + time + ')</span>';
+                      previewContent += '</div>';
+                    }
+                  }
+                }
               });
               
               previewContent += '</div>';
@@ -7995,7 +7937,10 @@ function previewAndSendSchedule() {
             
             previewContent += '</div>';
             
-            document.getElementById('scheduleContent').innerHTML = previewContent;
+            // Add summary at the top
+            const summaryHtml = '<div class="summary"><strong>' + totalOutings + ' outings scheduled this week</strong></div>';
+            
+            document.getElementById('scheduleContent').innerHTML = summaryHtml + previewContent;
           }
           
           function sendSelectedWeek() {
@@ -9414,7 +9359,19 @@ class EmailScheduler {
     const startIndex = dateIndex >= 0 ? dateIndex + 1 : 1;
     const endIndex = optionsIndex >= 0 ? optionsIndex : weekData.headers.length;
     
-    const houseColumns = weekData.headers.slice(startIndex, endIndex);
+    // Filter house columns to exclude empty or boolean values
+    const houseColumns = [];
+    const houseIndexes = [];
+    for (let i = startIndex; i < endIndex; i++) {
+      const header = weekData.headers[i];
+      if (header && header.trim() !== '' && 
+          header.toLowerCase() !== 'true' && 
+          header.toLowerCase() !== 'false' &&
+          !header.toLowerCase().includes('option')) {
+        houseColumns.push(header);
+        houseIndexes.push(i);
+      }
+    }
     
     let html = `
       <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">`;
@@ -9445,69 +9402,68 @@ class EmailScheduler {
       let dayHasOutings = false;
       for (let i = 0; i < houseColumns.length; i++) {
         const house = houseColumns[i];
-        const dataIndex = startIndex + i;
-        const cellData = row[dataIndex] || '';
-      
-      // Skip empty house names
-      if (!house || house.trim() === '') continue;
-      
-      if (cellData && cellData !== 'TBD' && cellData !== 'UNASSIGNED' && cellData.toString().trim() !== '') {
-        const parts = cellData.toString().split('\n');
-        const vendor = parts[0] || '';
-        const time = parts[1] || '';
+        const cellData = row[houseIndexes[i]] || '';
         
-        // Get vendor contact information
-        const vendorData = vendors[vendor] || {};
-        const contact = vendorData.Contact || 'Contact info not available';
-        const address = vendorData.Address || '';
+        // Skip empty cells
+        if (!cellData || cellData.toString().trim() === '') continue;
         
-        // Combine contact and address
-        let contactInfo = contact;
-        if (address && address.trim()) {
-          contactInfo += `<br><small style="color: #888;">${address}</small>`;
+        if (cellData !== 'TBD' && cellData !== 'UNASSIGNED') {
+          const parts = cellData.toString().split('\n');
+          const vendor = parts[0] || '';
+          const time = parts[1] || '';
+          
+          // Get vendor contact information
+          const vendorData = vendors[vendor] || {};
+          const contact = vendorData.Contact || 'Contact info not available';
+          const address = vendorData.Address || '';
+          
+          // Combine contact and address
+          let contactInfo = contact;
+          if (address && address.trim()) {
+            contactInfo += `<br><small style="color: #888;">${address}</small>`;
+          }
+          
+          // Get vendor background color (matches Google Sheets colors)
+          const dataManager = new DataManager(SpreadsheetApp.getActiveSpreadsheet());
+          const bgColor = dataManager.getVendorBackgroundColor(vendor, vendorData);
+          const houseHeaderColor = dataManager.getHouseHeaderColor(house);
+          const houseColor = dataManager.getHouseColor(house);
+          
+          html += `
+            <tr>
+              <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; font-weight: 600; background-color: ${houseHeaderColor}; color: ${houseColor};">${house}</td>
+              <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; background-color: ${bgColor}; font-weight: 500; color: #2c3e50;">${vendor}</td>
+              <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; color: #34495e;">${time}</td>
+              <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; font-size: 12px; color: #7f8c8d;">${contactInfo}</td>
+            </tr>`;
+          hasScheduledOuting = true;
+          dayHasOutings = true;
         }
-        
-        // Get vendor background color (matches Google Sheets colors)
-        const dataManager = new DataManager(SpreadsheetApp.getActiveSpreadsheet());
-        const bgColor = dataManager.getVendorBackgroundColor(vendor, vendorData);
-        const houseHeaderColor = dataManager.getHouseHeaderColor(house);
-        const houseColor = dataManager.getHouseColor(house);
-        
+      }
+      
+      // If no outings for this day, add a note
+      if (!dayHasOutings) {
         html += `
           <tr>
-            <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; font-weight: 600; background-color: ${houseHeaderColor}; color: ${houseColor};">${house}</td>
-            <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; background-color: ${bgColor}; font-weight: 500; color: #2c3e50;">${vendor}</td>
-            <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; color: #34495e;">${time}</td>
-            <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; font-size: 12px; color: #7f8c8d;">${contactInfo}</td>
+            <td colspan="4" style="padding: 12px 16px; text-align: center; color: #95a5a6; font-style: italic; border-bottom: 1px solid #f0f0f0;">
+              No outings scheduled for this day
+            </td>
           </tr>`;
-        hasScheduledOuting = true;
-        dayHasOutings = true;
       }
+      
+      // Add spacer row between days
+      html += `<tr><td colspan="4" style="padding: 4px; background: #f8f9fa;"></td></tr>`;
     }
     
-    // If no outings for this day, add a note
-    if (!dayHasOutings) {
+    // If no outings at all
+    if (!hasScheduledOuting) {
       html += `
         <tr>
-          <td colspan="4" style="padding: 12px 16px; text-align: center; color: #95a5a6; font-style: italic; border-bottom: 1px solid #f0f0f0;">
-            No outings scheduled for this day
+          <td colspan="4" style="padding: 30px; text-align: center; color: #7f8c8d; font-style: italic;">
+            No therapeutic outings scheduled for this week
           </td>
         </tr>`;
     }
-    
-    // Add spacer row between days
-    html += `<tr><td colspan="4" style="padding: 4px; background: #f8f9fa;"></td></tr>`;
-  }
-  
-  // If no outings at all
-  if (!hasScheduledOuting) {
-    html += `
-      <tr>
-        <td colspan="4" style="padding: 30px; text-align: center; color: #7f8c8d; font-style: italic;">
-          No therapeutic outings scheduled for this week
-        </td>
-      </tr>`;
-  }
     
     html += '</table>';
     
@@ -11149,9 +11105,10 @@ function createHouseScheduleHtml(houseName, schedule) {
       
       <div class="contact-info">
         <h4>📞 Important Contacts</h4>
-        <p><strong>Main Office:</strong> (561) 555-0123</p>
-        <p><strong>Emergency:</strong> (561) 555-0911</p>
-        <p><strong>Email:</strong> scheduling@familyfirstas.com</p>
+        <p><strong>Director of Case Management:</strong> Christopher Molina</p>
+        <p><strong>Phone:</strong> (561) 703-4864</p>
+        <p><strong>Email:</strong> cmolina@familyfirstas.com</p>
+        <p><strong>Scheduling Email:</strong> scheduling@familyfirstas.com</p>
       </div>
   `;
   
@@ -11589,13 +11546,15 @@ function generateVendorSchedulePdfs() {
     ui.alert('Error', 'Failed to generate PDFs: ' + error.toString(), ui.ButtonSet.OK);
   }
 }
+
 /**
  * Create HTML content for vendor schedule PDF
  */
 function createVendorScheduleHtml(vendorName, vendorData, assignments) {
-  const year = new Date().getFullYear();
-  
-  let html = `
+  try {
+    const year = new Date().getFullYear();
+    
+    let html = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -11717,29 +11676,33 @@ function createVendorScheduleHtml(vendorName, vendorData, assignments) {
     monthGroups[monthKey].push(assignment);
   });
   
-  // Add PC contact information section first
-  const uniqueHouses = [...new Set(assignments.map(a => a.house))];
-  if (uniqueHouses.length > 0) {
-    html += `
-      <div class="contact-info">
-        <h3>🚨 Program Coordinator Contacts</h3>
-        <p><strong>Call these numbers if you have issues or questions about specific houses:</strong></p>
-    `;
-    
-    uniqueHouses.forEach(house => {
-      const pcInfo = CONFIG.PC_CONTACTS[house];
-      if (pcInfo) {
-        html += `<p><strong>${house}:</strong> ${pcInfo.name} - ${pcInfo.phone}</p>`;
-      } else {
-        html += `<p><strong>${house}:</strong> Main Office - ${CONFIG.MAIN_CONTACT_PHONE || '(561) 555-0123'}</p>`;
-      }
-    });
-    
-    html += `
-        <p><em>Save these numbers in your phone for quick access!</em></p>
-      </div>
-    `;
-  }
+  // Add PC contact information section with ALL PCs
+  html += `
+    <div class="contact-info">
+      <h3>🚨 Important Contacts</h3>
+      <h4>Program Coordinators:</h4>
+  `;
+  
+  // Get unique PCs (some PCs manage multiple houses)
+  const uniquePCs = new Map();
+  Object.entries(CONFIG.PC_CONTACTS).forEach(([house, pcInfo]) => {
+    if (!uniquePCs.has(pcInfo.name)) {
+      uniquePCs.set(pcInfo.name, pcInfo);
+    }
+  });
+  
+  // Display all PCs
+  uniquePCs.forEach(pc => {
+    html += `<p><strong>${pc.name}:</strong> ${pc.phone} (${pc.houses.join(', ')})</p>`;
+  });
+  
+  html += `
+    <h4>Director of Case Management:</h4>
+    <p><strong>Christopher Molina:</strong> ${CONFIG.MAIN_CONTACT_PHONE || '(561) 703-4864'}</p>
+    <p><strong>Email:</strong> ${CONFIG.DIRECTOR_EMAIL || 'cmolina@familyfirstas.com'}</p>
+    <p><em>Save these numbers in your phone for quick access!</em></p>
+  </div>
+  `;
 
   // Add schedule table by month
   html += '<h3 style="color: #1976d2;">Scheduled Outings</h3>';
@@ -11761,7 +11724,7 @@ function createVendorScheduleHtml(vendorName, vendorData, assignments) {
       const dateStr = Utilities.formatDate(assignment.date, CONFIG.DEFAULT_TIMEZONE, 'MMM d');
       const dayStr = Utilities.formatDate(assignment.date, CONFIG.DEFAULT_TIMEZONE, 'EEEE');
       const pcInfo = CONFIG.PC_CONTACTS[assignment.house];
-      const pcContact = pcInfo ? `${pcInfo.name}<br/>${pcInfo.phone}` : `Main Office<br/>${CONFIG.MAIN_CONTACT_PHONE || '(561) 555-0123'}`;
+      const pcContact = pcInfo ? `${pcInfo.name}<br/>${pcInfo.phone}` : `Christopher Molina<br/>${CONFIG.MAIN_CONTACT_PHONE || '(561) 703-4864'}`;
       
       html += `
         <tr>
@@ -11788,7 +11751,11 @@ function createVendorScheduleHtml(vendorName, vendorData, assignments) {
     </html>
   `;
   
-  return html;
+    return html;
+  } catch (error) {
+    console.error('Error in createVendorScheduleHtml:', error);
+    throw error;
+  }
 }
 
 /**
@@ -11911,7 +11878,7 @@ function createPublicVendorSchedules() {
           }
           return {
             pcContact: 'Main Office',
-            pcPhone: CONFIG.MAIN_CONTACT_PHONE || '(561) 555-0123'
+            pcPhone: CONFIG.MAIN_CONTACT_PHONE || '(561) 703-4864'
           };
         };
         
@@ -11947,14 +11914,19 @@ function createPublicVendorSchedules() {
         vendorSheet.getRange(2, 1).setValue('🚨 EMERGENCY CONTACTS & IMPORTANT INFORMATION');
         vendorSheet.getRange(2, 1, 1, sheetHeaders.length).merge().setFontSize(12).setFontWeight('bold').setBackground('#ff6d01').setFontColor('white');
         
-        // Get unique houses for this vendor to show relevant PC contacts
-        const uniqueHouses = [...new Set(assignments.map(a => a.house))];
-        const relevantPCs = uniqueHouses.map(house => {
-          const pcInfo = getPCContact(house);
-          return `${house}: ${pcInfo.pcContact} - ${pcInfo.pcPhone}`;
-        }).join(' | ');
+        // Show ALL PC contacts
+        const uniquePCs = new Map();
+        Object.entries(CONFIG.PC_CONTACTS).forEach(([house, pcInfo]) => {
+          if (!uniquePCs.has(pcInfo.name)) {
+            uniquePCs.set(pcInfo.name, {...pcInfo});
+          }
+        });
         
-        vendorSheet.getRange(3, 1).setValue(`PROGRAM COORDINATORS: ${relevantPCs} | MAIN OFFICE: ${CONFIG.MAIN_CONTACT_PHONE || '(561) 555-0123'}`);
+        const allPCs = Array.from(uniquePCs.values()).map(pc => 
+          `${pc.name}: ${pc.phone} (${pc.houses.join(', ')})`
+        ).join(' | ');
+        
+        vendorSheet.getRange(3, 1).setValue(`PROGRAM COORDINATORS: ${allPCs} | DIRECTOR: Christopher Molina - ${CONFIG.MAIN_CONTACT_PHONE || '(561) 703-4864'} - ${CONFIG.DIRECTOR_EMAIL || 'cmolina@familyfirstas.com'}`);
         vendorSheet.getRange(3, 1, 1, sheetHeaders.length).merge().setFontSize(10).setBackground('#fff2cc').setWrap(true);
         
         // Make spreadsheet publicly viewable
@@ -12641,11 +12613,15 @@ function logPerformanceMetric(operation, duration, details) {
 /**
  * Custom validation error
  */
-class ValidationError extends Error {
+class ValidationError {
   constructor(errors) {
-    super('Validation failed');
+    this.message = 'Validation failed';
     this.name = 'ValidationError';
     this.errors = errors;
+  }
+  
+  toString() {
+    return this.name + ': ' + this.message;
   }
 }
 
@@ -13214,7 +13190,7 @@ function sendOnboardingEmailTo(recipient, options) {
         
         <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #1a73e8;">
           <h2 style="color: #1a73e8; margin-top: 0; font-size: 18px;">📧 Your Weekly Email</h2>
-          <p><strong>Every Monday morning at 8:00 AM, you'll get an email with:</strong></p>
+          <p><strong>Every Monday morning at 10:00 AM, you'll get an email with:</strong></p>
           <ul style="margin: 10px 0; padding-left: 20px;">
             <li>📅 This week's complete schedule</li>
             <li>🏠 Which houses go where</li>
@@ -13303,7 +13279,7 @@ Hi there! Welcome to FFAS! 👋
 Starting Monday, you'll get automatic emails with your weekly therapeutic outings schedule.
 
 === YOUR WEEKLY EMAIL ===
-Every Monday morning at 8:00 AM you'll get an email with:
+Every Monday morning at 10:00 AM you'll get an email with:
 • This week's complete schedule
 • Which houses go where  
 • Phone numbers for each place
@@ -13434,7 +13410,7 @@ function showSystemOverview() {
       <div style="background: #f3e8ff; padding: 15px; border-radius: 8px;">
         <h4 style="color: #1976d2; margin-top: 0;">📧 Receiving Schedule Emails</h4>
         <p style="margin: 5px 0; font-size: 14px;">
-          • <strong>When:</strong> Every Monday at 8:00 AM<br>
+          • <strong>When:</strong> Every Monday at 10:00 AM<br>
           • <strong>What:</strong> Complete weekly schedule with all outings<br>
           • <strong>Includes:</strong> House, vendor, time, contact numbers, and addresses<br>
           • <strong>Format:</strong> Professional HTML email (works on all devices)
@@ -13481,7 +13457,7 @@ function showSystemOverview() {
         <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; border: 1px solid #bbf7d0;">
           <h4 style="color: #16a34a; margin-top: 0;">✅ AFTER (Automated System)</h4>
           <div style="font-size: 13px; color: #666;">
-            <p><strong>Every Monday at 8:00 AM:</strong></p>
+            <p><strong>Every Monday at 10:00 AM:</strong></p>
             <ol style="padding-left: 15px; margin: 5px 0;">
               <li>✨ System automatically runs</li>
               <li>📅 Finds current week's schedule</li>
@@ -15039,9 +15015,9 @@ function showAutomationSettings() {
   if (mondayTrigger) {
     const triggerSource = mondayTrigger.getTriggerSource();
     const eventType = mondayTrigger.getEventType();
-    statusMessage = `✅ ACTIVE - Emails will be sent automatically every Monday at 8:00 AM\n\n`;
+    statusMessage = `✅ ACTIVE - Emails will be sent automatically every Monday at 10:00 AM\n\n`;
     statusMessage += `📧 Recipients: ${recipientCount} configured\n`;
-    statusMessage += `⏰ Next trigger: Monday at 8:00 AM\n`;
+    statusMessage += `⏰ Next trigger: Monday at 10:00 AM\n`;
     statusMessage += `🔄 Function: previewAndSendSchedule\n\n`;
     statusMessage += `The system will automatically send the weekly therapeutic outings schedule to all configured recipients every Monday morning.`;
   } else {
@@ -15407,11 +15383,11 @@ function setupEnhancedTrigger() {
       }
     });
     
-    // Create new trigger for Monday at 8:00 AM
+    // Create new trigger for Monday at 10:00 AM
     const trigger = ScriptApp.newTrigger('previewAndSendSchedule')
       .timeBased()
       .onWeekDay(ScriptApp.WeekDay.MONDAY)
-      .atHour(8)
+      .atHour(10)
       .create();
     
     // Verify email recipients are configured
@@ -15425,7 +15401,7 @@ function setupEnhancedTrigger() {
     ui.alert(
       '✅ Monday Email Automation Enabled',
       `🔄 AUTOMATIC WEEKLY REMINDERS ARE NOW ACTIVE!\n\n` +
-      `📅 Schedule: Every Monday at 8:00 AM\n` +
+      `📅 Schedule: Every Monday at 10:00 AM\n` +
       `📧 Recipients (${recipientCount}):\n• ${recipientsList}\n\n` +
       `📋 What happens automatically:\n` +
       `• System checks for this week's therapeutic outings schedule\n` +
@@ -15439,7 +15415,7 @@ function setupEnhancedTrigger() {
     // Log the automation setup
     auditLog('AUTOMATION_ENABLED', {
       function: 'previewAndSendSchedule',
-      schedule: 'Monday 8:00 AM',
+      schedule: 'Monday 10:00 AM',
       recipients: recipients,
       triggerId: trigger.getUniqueId()
     });
