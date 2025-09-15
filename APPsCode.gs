@@ -151,7 +151,7 @@ CONFIG.VENDOR_PDF_FOLDER_ID = null;
  */
 function ensureVendorsExist() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const dataManager = new DataManager();
+  const dataManager = new DataManager(ss);
   
   // Check if vendors exist
   const vendors = dataManager.getVendors();
@@ -11466,6 +11466,10 @@ function generateVendorSchedulePdfs() {
     }
     
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      throw new Error('No active spreadsheet found. Please open this script from a Google Sheets file.');
+    }
+    
     const dataManager = new DataManager(ss);
     const scheduleSheet = ss.getSheetByName('SCHEDULE');
     
