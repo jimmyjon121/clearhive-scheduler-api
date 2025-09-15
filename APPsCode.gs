@@ -41,6 +41,120 @@
  * COMPLIANCE: HIPAA-safe, no PHI stored or transmitted
  *************************************************************/
 
+// ======================== CONSTANTS & CONFIG ========================
+
+const CONFIG = {
+  VERSION: '5.0.0',
+  PRODUCT_NAME: 'Family First Therapeutic Outings Scheduler',
+  COMPANY: 'ClearHive Health',
+  CLIENT: 'Family First Adolescent Services',
+  
+  // Email Configuration
+  RECIPIENTS_KEY: 'EMAIL_RECIPIENTS_LIST', // ScriptProperties key for recipients
+  PREFERRED_SENDER_EMAIL: 'cmolina@familyfirstas.com', // Preferred email sender
+  
+  // Email delivery settings for large distribution lists
+  EMAIL_SETTINGS: {
+    MAX_RECIPIENTS_PER_EMAIL: 50, // Split large groups to avoid delivery issues
+    DELAY_BETWEEN_BATCHES: 2000, // 2 seconds between batches
+    BCC_LARGE_GROUPS: true, // Use BCC for large distribution lists
+    RETRY_FAILED_EMAILS: true,
+    MAX_RETRIES: 3,
+    LARGE_GROUP_THRESHOLD: 10, // Groups with more than this many recipients get special handling
+    USE_PREFERRED_SENDER: true // Use CONFIG.PREFERRED_SENDER_EMAIL when possible
+  },
+  
+  CACHE_DURATION: 300000, // 5 minutes in milliseconds
+  MAX_RETRIES: 3,
+  RETRY_DELAY: 1000,
+  BATCH_SIZE: 50,
+  PERFORMANCE_THRESHOLD: 5000, // ms
+  LOG_RETENTION_DAYS: 90,
+  DEFAULT_TIMEZONE: Session.getScriptTimeZone(),
+  SUPPORTED_TIMEZONES: ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles'],
+  FEATURES: {
+    SMART_SCHEDULING: true,
+    CONFLICT_DETECTION: true,
+    AUTO_OPTIMIZATION: true,
+    WEBHOOK_ENABLED: false,
+    ANALYTICS_ENABLED: true,
+    AUDIT_LOGGING: true,
+    MULTI_LANGUAGE: false
+  },
+  
+  // Priority vendors that MUST appear weekly
+  WEEKLY_PRIORITY_VENDORS: [
+    'Kyaking John D McArthur State Park.',
+    'Groovy Goat Farm',  // Goat Yoga
+    'Surf Therapy',
+    'Johnson Folly Equestrian Farm',  // Equine Therapy
+    'The Peach Therapeutic Painting'  // Peach Therapy Painting
+  ],
+  
+  // Core vendors that should be rotated fairly (includes priority + others)
+  CORE_ROTATION_VENDORS: [
+    'Surf Therapy',
+    'Johnson Folly Equestrian Farm',
+    'Groovy Goat Farm',
+    'The Peach Therapeutic Painting',
+    'Kyaking John D McArthur State Park.'
+  ],
+  
+  // House-specific colors for visual consistency
+  HOUSE_COLORS: {
+    'House 1': '#E3F2FD',
+    'House 2': '#F3E5F5', 
+    'House 3': '#E8F5E9',
+    'House 4': '#FFF3E0',
+    'House 5': '#FCE4EC',
+    'House 6': '#E8EAF6'
+  },
+  
+  // Email domain requirements
+  ALLOWED_DOMAINS: ['@familyfirstas.com', '@clearhive.com'],
+  PERSONAL_DOMAINS: ['@gmail.com', '@yahoo.com', '@hotmail.com', '@outlook.com', '@aol.com'],
+  
+  // Emergency contact information for vendors
+  MAIN_CONTACT_PHONE: '(561) 703-4864', // Christopher Molina - Director of Case Management
+  
+  // Program Coordinator (PC) contacts by house
+  PC_CONTACTS: {
+    'Prosperity': { name: 'Tyler G.', phone: '410-530-3184', houses: ['Prosperity', 'Preserve'] },
+    'Preserve': { name: 'Tyler G.', phone: '410-530-3184', houses: ['Prosperity', 'Preserve'] },
+    'Banyan': { name: 'Sam D.', phone: '561-388-5164', houses: ['Banyan'] },
+    'Hedge': { name: 'Tim G.', phone: '561-351-2073', houses: ['Hedge'] },
+    'Meridian': { name: 'Devin S.', phone: '561-714-9879', houses: ['Meridian'] },
+    'Cove': { name: 'Carlos R.', phone: '515-570-2808', houses: ['Cove'] }
+  },
+  MAIN_CONTACT_EMAIL: 'scheduling@familyfirstas.com',
+  DIRECTOR_EMAIL: 'cmolina@familyfirstas.com', // Christopher Molina - Director of Case Management
+  EMERGENCY_CONTACT: '(561) 703-4864', // Christopher Molina - Director of Case Management
+  MAIN_OFFICE_HOURS: 'Monday-Friday: 8:00 AM - 6:00 PM',
+  AFTER_HOURS_CONTACT: 'Call main number for on-call coordinator'
+};
+
+// Initialize PDF folder ID (will be auto-created if needed)
+CONFIG.VENDOR_PDF_FOLDER_ID = null;
+
+/**
+ * Quick fix to populate vendors if missing
+ */
+function ensureVendorsExist() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dataManager = new DataManager();
+  
+  // Check if vendors exist
+  const vendors = dataManager.getVendors();
+  if (!vendors || Object.keys(vendors).length === 0) {
+    // Set up vendors sheet with default data
+    setupVendorsSheet(ss);
+    // Clear the cache to force reload
+    dataManager.clearCache();
+  }
+  
+  return dataManager.getVendors();
+}
+
 /**
  * Send weekly emails to the 3 distribution lists with week selection
  * Allows choosing which week's schedule to send
@@ -162,67 +276,13 @@ function formatScheduleConfirmation(weekType, monday) {
       };
   }
 }
-          }
-          
-          google.script.run
-            .withSuccessHandler(function(result) {
-              preview.innerHTML = result;
-            })
-            .withFailureHandler(function(error) {
-              preview.innerHTML = '⚠️ Error loading schedule';
-            })
-            .getCompactSchedulePreview(selectedWeek, weekDate);
-        }
-        
-        function sendEmails() {
-          const status = document.getElementById('status');
-          status.className = 'status';
-          status.style.display = 'block';
-          status.textContent = 'Sending emails...';
-          
-          let weekDate = null;
-          if (selectedWeek === 'specific') {
-            weekDate = document.getElementById('specificDate').value;
-            if (!weekDate) {
-              status.className = 'status error';
-              status.textContent = 'Please select a date first';
-              return;
-            }
-          }
-          
-          google.script.run
-            .withSuccessHandler(function(result) {
-              status.className = 'status success';
-              status.textContent = '✅ ' + result;
-              setTimeout(() => google.script.host.close(), 2000);
-            })
-            .withFailureHandler(function(error) {
-              status.className = 'status error';
-              status.textContent = '❌ Error: ' + error.toString();
-            })
-            // Email sending is now handled by sendWeeklyEmailsToDistributionLists
-        }
-        
-        // Select current week by default
-        selectWeek('current');
-      </script>
-    </body>
-    </html>
-  `;
-  
-  const htmlOutput = HtmlService.createHtmlOutput(htmlContent)
-    .setWidth(600)
-    .setHeight(700);
-  
-  SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Send Weekly Schedule');
-}
-
-// Moved getEmailPreview and isSameWeek functions to after CONFIG definition (see line ~2500)
 
 /**
  * Process the weekly email send with selected week
+ * @param {string} weekSelection - 'current', 'next', or 'specific'
+ * @param {Date} specificDate - The specific date if weekSelection is 'specific'
  */
-// Email sending is now handled by sendWeeklyEmailsToDistributionLists
+function processWeeklyEmailSend(weekSelection = 'current', specificDate = null) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const scheduleSheet = ss.getSheetByName('SCHEDULE');
   
@@ -283,16 +343,40 @@ function formatScheduleConfirmation(weekType, monday) {
  * - Nest_CA@familyfirstas.com
  * - Cove_CA@familyfirstas.com
  */
-// Distribution list emails are now handled automatically
-              </div>
-            \`).join('');
-            
-            // Load any saved house recipients
+
+/**
+ * Shows a dialog for setting up dual email recipients
+ */
+function showDualEmailDialog() {
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <base target="_top">
+        <style>
+          /* Styles for the dialog */
+        </style>
+      </head>
+      <body>
+        <script>
+          // Client-side JavaScript for the dialog
+          function loadHouses() {
             google.script.run
-              .withSuccessHandler(function(saved) {
-                if (saved) {
-                  for (const house in saved) {
-                    const input = document.getElementById('house_' + house);
+              .withSuccessHandler(function(houses) {
+                const container = document.getElementById('houseContainer');
+                container.innerHTML = houses.map(house => \`
+                  <div class="form-group">
+                    <label>\${house} House Recipients:</label>
+                    <input type="text" id="house_\${house}" placeholder="Enter emails separated by commas">
+                  </div>
+                \`).join('');
+                
+                // Load any saved house recipients
+                google.script.run
+                  .withSuccessHandler(function(saved) {
+                    if (saved) {
+                      for (const house in saved) {
+                        const input = document.getElementById('house_' + house);
                     if (input) input.value = saved[house];
                   }
                 }
@@ -2086,100 +2170,6 @@ function testVendorCalendarDisplay() {
     ui.alert('Error', `Failed to create test event: ${error.message}`, ui.ButtonSet.OK);
   }
 }
-
-// ======================== CONSTANTS & CONFIG ========================
-
-const CONFIG = {
-  VERSION: '5.0.0',
-  PRODUCT_NAME: 'Family First Therapeutic Outings Scheduler',
-  COMPANY: 'ClearHive Health',
-  CLIENT: 'Family First Adolescent Services',
-  
-  // Email Configuration
-  RECIPIENTS_KEY: 'EMAIL_RECIPIENTS_LIST', // ScriptProperties key for recipients
-  PREFERRED_SENDER_EMAIL: 'cmolina@familyfirstas.com', // Preferred email sender
-  
-  // Email delivery settings for large distribution lists
-  EMAIL_SETTINGS: {
-    MAX_RECIPIENTS_PER_EMAIL: 50, // Split large groups to avoid delivery issues
-    DELAY_BETWEEN_BATCHES: 2000, // 2 seconds between batches
-    BCC_LARGE_GROUPS: true, // Use BCC for large distribution lists
-    RETRY_FAILED_EMAILS: true,
-    MAX_RETRIES: 3,
-    LARGE_GROUP_THRESHOLD: 10, // Groups with more than this many recipients get special handling
-    USE_PREFERRED_SENDER: true // Use CONFIG.PREFERRED_SENDER_EMAIL when possible
-  },
-  
-  CACHE_DURATION: 300000, // 5 minutes in milliseconds
-  MAX_RETRIES: 3,
-  RETRY_DELAY: 1000,
-  BATCH_SIZE: 50,
-  PERFORMANCE_THRESHOLD: 5000, // ms
-  LOG_RETENTION_DAYS: 90,
-  DEFAULT_TIMEZONE: Session.getScriptTimeZone(),
-  SUPPORTED_TIMEZONES: ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles'],
-  FEATURES: {
-    SMART_SCHEDULING: true,
-    CONFLICT_DETECTION: true,
-    AUTO_OPTIMIZATION: true,
-    WEBHOOK_ENABLED: false,
-    ANALYTICS_ENABLED: true,
-    AUDIT_LOGGING: true,
-    MULTI_LANGUAGE: false
-  },
-  
-  // Priority vendors that MUST appear weekly
-  WEEKLY_PRIORITY_VENDORS: [
-    'Kyaking John D McArthur State Park.',
-    'Groovy Goat Farm',  // Goat Yoga
-    'Surf Therapy',
-    'Johnson Folly Equestrian Farm',  // Equine Therapy
-    'The Peach Therapeutic Painting'  // Peach Therapy Painting
-  ],
-  
-  // Core vendors that should be rotated fairly (includes priority + others)
-  CORE_ROTATION_VENDORS: [
-    'Surf Therapy',
-    'Johnson Folly Equestrian Farm',
-    'Groovy Goat Farm',
-    'The Peach Therapeutic Painting',
-    'Kyaking John D McArthur State Park.'
-  ],
-  
-  // House-specific colors for visual consistency
-  HOUSE_COLORS: {
-    'House 1': '#E3F2FD',
-    'House 2': '#F3E5F5', 
-    'House 3': '#E8F5E9',
-    'House 4': '#FFF3E0',
-    'House 5': '#FCE4EC',
-    'House 6': '#E8EAF6'
-  },
-  
-  // Email domain requirements
-  ALLOWED_DOMAINS: ['@familyfirstas.com', '@clearhive.com'],
-  PERSONAL_DOMAINS: ['@gmail.com', '@yahoo.com', '@hotmail.com', '@outlook.com', '@aol.com'],
-  
-  // Emergency contact information for vendors
-  MAIN_CONTACT_PHONE: '(561) 703-4864', // Christopher Molina - Director of Case Management
-  
-  // Program Coordinator (PC) contacts by house
-  PC_CONTACTS: {
-    'Prosperity': { name: 'Tyler G.', phone: '410-530-3184', houses: ['Prosperity', 'Preserve'] },
-    'Preserve': { name: 'Tyler G.', phone: '410-530-3184', houses: ['Prosperity', 'Preserve'] },
-    'Banyan': { name: 'Sam D.', phone: '561-388-5164', houses: ['Banyan'] },
-    'Hedge': { name: 'Tim G.', phone: '561-351-2073', houses: ['Hedge'] },
-    'Meridian': { name: 'Devin S.', phone: '561-714-9879', houses: ['Meridian'] },
-    'Cove': { name: 'Carlos R.', phone: '515-570-2808', houses: ['Cove'] }
-  },
-  MAIN_CONTACT_EMAIL: 'scheduling@familyfirstas.com',
-  DIRECTOR_EMAIL: 'cmolina@familyfirstas.com', // Christopher Molina - Director of Case Management
-  EMERGENCY_CONTACT: '(561) 703-4864', // Christopher Molina - Director of Case Management
-  MAIN_OFFICE_HOURS: 'Monday-Friday: 8:00 AM - 6:00 PM',
-  AFTER_HOURS_CONTACT: 'Call main number for on-call coordinator'
-};
-// Initialize PDF folder ID (will be auto-created if needed)
-CONFIG.VENDOR_PDF_FOLDER_ID = null;
 
 // ======================== EMAIL PREVIEW FUNCTIONS ========================
 
@@ -6747,6 +6737,50 @@ class DataManager {
         'Name', 'Type', 'Capacity', 'Contact', 'Active', 'WeeklyLimit', 
         'Blackout', 'Color', 'CalendarId', 'QualityScore', 'Preferences', 'Address'
       ]]);
+      
+      // Populate with default vendors from CONFIG
+      if (CONFIG && CONFIG.CORE_ROTATION_VENDORS && CONFIG.CORE_ROTATION_VENDORS.length > 0) {
+        const vendorData = CONFIG.CORE_ROTATION_VENDORS.map(vendor => {
+          // Determine type based on vendor name
+          let type = 'General';
+          const vendorLower = vendor.toLowerCase();
+          
+          if (vendorLower.includes('park')) type = 'Outdoor';
+          else if (vendorLower.includes('equestrian') || vendorLower.includes('horse')) type = 'Animals';
+          else if (vendorLower.includes('beach') || vendorLower.includes('surf')) type = 'Beach';
+          else if (vendorLower.includes('goat') || vendorLower.includes('farm')) type = 'Animals';
+          else if (vendorLower.includes('ymca')) type = 'Active';
+          else if (vendorLower.includes('bowling')) type = 'Recreation';
+          else if (vendorLower.includes('art') || vendorLower.includes('paint')) type = 'Creative';
+          else if (vendorLower.includes('museum')) type = 'Educational';
+          else if (vendorLower.includes('zoo')) type = 'Animals';
+          else if (vendorLower.includes('aquarium')) type = 'Educational';
+          
+          // Check if it's a priority vendor
+          const isPriority = CONFIG.WEEKLY_PRIORITY_VENDORS && 
+                           CONFIG.WEEKLY_PRIORITY_VENDORS.includes(vendor);
+          
+          return [
+            vendor,           // Name
+            type,             // Type
+            '10',             // Capacity
+            '',               // Contact
+            'TRUE',           // Active
+            isPriority ? '3' : '2',  // Weekly Limit (priority vendors can appear more)
+            '',               // Blackout Dates
+            '',               // Color (assigned dynamically)
+            '',               // Calendar ID
+            '85',             // Quality Score
+            '',               // Preferences
+            ''                // Address
+          ];
+        });
+        
+        // Add the vendor data
+        if (vendorData.length > 0) {
+          sheet.getRange(2, 1, vendorData.length, 12).setValues(vendorData);
+        }
+      }
     }
     const values = sheet.getDataRange().getValues();
     const vendors = {};
@@ -11431,6 +11465,9 @@ function generateVendorSchedulePdfs() {
     
     updateProgress(10, 'Loading vendor data...', '');
     
+    // Ensure vendors exist first
+    ensureVendorsExist();
+    
     // Get vendors data with validation
     let vendors;
     let retries = 0;
@@ -11439,7 +11476,7 @@ function generateVendorSchedulePdfs() {
     while (retries < maxRetries) {
       try {
         vendors = dataManager.getVendors();
-        if (vendors && vendors.length > 0) {
+        if (vendors && Object.keys(vendors).length > 0) {
           break;
         }
         throw new Error('No vendors found. Please set up vendors first.');
@@ -15376,18 +15413,19 @@ function setupEnhancedTrigger() {
     // Remove existing triggers
     const triggers = ScriptApp.getProjectTriggers();
     triggers.forEach(trigger => {
-      if (trigger.getHandlerFunction() === 'previewAndSendSchedule' ||
+      if (trigger.getHandlerFunction() === 'sendWeeklyEmailsToDistributionLists' ||
+          trigger.getHandlerFunction() === 'previewAndSendSchedule' ||
           trigger.getHandlerFunction() === 'emailMondayPdfEnhanced' ||
           trigger.getHandlerFunction() === 'emailMondayPdf') {
         ScriptApp.deleteTrigger(trigger);
       }
     });
     
-    // Create new trigger for Monday at 10:00 AM
-    const trigger = ScriptApp.newTrigger('previewAndSendSchedule')
+    // Create new trigger for Monday at 8:00 AM
+    const trigger = ScriptApp.newTrigger('sendWeeklyEmailsToDistributionLists')
       .timeBased()
       .onWeekDay(ScriptApp.WeekDay.MONDAY)
-      .atHour(10)
+      .atHour(8)
       .create();
     
     // Verify email recipients are configured
