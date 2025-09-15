@@ -1,3 +1,13 @@
+/**
+ * Quick function to select when saving - does nothing
+ * This prevents timeout errors when saving the script
+ */
+function doNothing() {
+  // This function intentionally left blank
+  // Select this function in the dropdown before saving to avoid timeouts
+  console.log("Script saved successfully!");
+}
+
 /************************************************************
  * Family First Therapeutic Outings Scheduler - Enterprise Edition v5.0
  * A ClearHive Health Product
