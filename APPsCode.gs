@@ -11405,28 +11405,22 @@ Generated on ${new Date().toLocaleString()}
 
 /**
  * Generate PDF schedules for CONTRACTED vendors only
- * Creates PDFs for: Goat Yoga, Peach Therapy, Surf Therapy, Equine, Kayaking
+ * Creates PDFs for vendors defined in CONFIG.WEEKLY_PRIORITY_VENDORS
  */
 function generateContractedVendorPdfs() {
   const ui = SpreadsheetApp.getUi();
   
-  // Define contracted vendors
-  const CONTRACTED_VENDORS = [
-    'Goat Yoga',
-    'Peach Therapy', 
-    'Surf Therapy',
-    'Equine',
-    'Kayaking'
-  ];
+  // Use the exact vendor names from CONFIG
+  const CONTRACTED_VENDORS = CONFIG.WEEKLY_PRIORITY_VENDORS;
   
   const confirm = ui.alert(
     '📄 Generate Contracted Vendor PDFs',
     'This will create PDFs for your contracted vendors:\n\n' +
-    '• Goat Yoga\n' +
-    '• Peach Therapy\n' +
+    '• Kyaking John D McArthur State Park\n' +
+    '• Groovy Goat Farm (Goat Yoga)\n' +
     '• Surf Therapy\n' +
-    '• Equine\n' +
-    '• Kayaking\n\n' +
+    '• Johnson Folly Equestrian Farm (Equine)\n' +
+    '• The Peach Therapeutic Painting\n\n' +
     'Each vendor will receive their schedule showing all houses visiting them.\n\n' +
     'Continue?',
     ui.ButtonSet.YES_NO
@@ -11440,7 +11434,6 @@ function generateContractedVendorPdfs() {
       throw new Error('No active spreadsheet found.');
     }
     
-    const dataManager = new DataManager(ss);
     const scheduleSheet = ss.getSheetByName('SCHEDULE');
     
     if (!scheduleSheet) {
@@ -11453,72 +11446,74 @@ function generateContractedVendorPdfs() {
     // Get schedule data
     const data = scheduleSheet.getDataRange().getValues();
     const headers = data[0];
-    const dateIndex = headers.indexOf('Date');
-    const houseIndex = headers.indexOf('House');
-    const timeIndex = headers.indexOf('Time');
-    const vendorIndex = headers.indexOf('Vendor');
     
-    // Group visits by vendor (only contracted ones)
+    // Group schedule by vendor (using same logic as existing generateVendorSchedulePdfs)
     const vendorSchedules = {};
     
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      const vendor = row[vendorIndex];
+    for (let row = 1; row < data.length; row++) {
+      const date = data[row][0];
+      if (!date) continue;
       
-      // Check if this is a contracted vendor
-      if (vendor && CONTRACTED_VENDORS.some(cv => vendor.toLowerCase().includes(cv.toLowerCase()))) {
-        if (!vendorSchedules[vendor]) {
-          vendorSchedules[vendor] = [];
-        }
+      for (let col = 1; col < headers.length; col++) {
+        const house = headers[col];
+        if (!house || house === 'Options' || house === 'Locked?') continue;
         
-        vendorSchedules[vendor].push({
-          date: row[dateIndex],
-          house: row[houseIndex],
-          time: row[timeIndex],
-          vendor: vendor
-        });
+        const cellValue = data[row][col];
+        if (!cellValue || cellValue === 'UNASSIGNED' || cellValue === 'TBD') continue;
+        
+        // Parse vendor name and time from cell value
+        const lines = cellValue.toString().split('\n');
+        const vendorName = lines[0];
+        const time = lines[1] || 'Time TBD';
+        
+        // Check if this is a contracted vendor
+        if (CONTRACTED_VENDORS.some(cv => vendorName.includes(cv))) {
+          if (!vendorSchedules[vendorName]) {
+            vendorSchedules[vendorName] = [];
+          }
+          
+          vendorSchedules[vendorName].push({
+            date: new Date(date),
+            house: house,
+            time: time
+          });
+        }
       }
     }
     
-    // Generate PDFs for each contracted vendor
+    // Generate PDFs for each contracted vendor that has visits
     const pdfLinks = [];
     let vendorsWithSchedules = 0;
     
-    for (const vendor of CONTRACTED_VENDORS) {
-      // Find the actual vendor name in the schedule (case-insensitive match)
-      const actualVendorName = Object.keys(vendorSchedules).find(v => 
-        v.toLowerCase().includes(vendor.toLowerCase())
-      );
-      
-      if (actualVendorName && vendorSchedules[actualVendorName].length > 0) {
+    Object.keys(vendorSchedules).forEach(vendorName => {
+      if (vendorSchedules[vendorName].length > 0) {
         vendorsWithSchedules++;
-        const visits = vendorSchedules[actualVendorName];
+        const visits = vendorSchedules[vendorName];
         
         // Sort visits by date
-        visits.sort((a, b) => new Date(a.date) - new Date(b.date));
+        visits.sort((a, b) => a.date - b.date);
         
         // Create vendor-specific sheet
-        const tempSheetName = `VENDOR_${actualVendorName}_TEMP`;
+        const tempSheetName = `VENDOR_${vendorName.substring(0, 20)}_TEMP`;
         let tempSheet = ss.getSheetByName(tempSheetName);
         if (tempSheet) ss.deleteSheet(tempSheet);
         tempSheet = ss.insertSheet(tempSheetName);
         
-        // Add header
-        tempSheet.getRange(1, 1, 1, 4).setValues([['Date', 'House', 'Time', 'Details']]);
-        tempSheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#34495e').setFontColor('white');
-        
         // Add vendor name as title
-        tempSheet.insertRowBefore(1);
-        tempSheet.getRange(1, 1).setValue(`${actualVendorName} Schedule`);
+        tempSheet.getRange(1, 1).setValue(`${vendorName} Schedule`);
         tempSheet.getRange(1, 1, 1, 4).merge();
         tempSheet.getRange(1, 1).setFontSize(18).setFontWeight('bold').setHorizontalAlignment('center');
         
+        // Add header
+        tempSheet.getRange(2, 1, 1, 4).setValues([['Date', 'House', 'Time', 'Contact Info']]);
+        tempSheet.getRange(2, 1, 1, 4).setFontWeight('bold').setBackground('#34495e').setFontColor('white');
+        
         // Add visits
         const visitData = visits.map(visit => [
-          Utilities.formatDate(new Date(visit.date), Session.getScriptTimeZone(), 'EEEE, MMMM d'),
+          Utilities.formatDate(visit.date, Session.getScriptTimeZone(), 'EEEE, MMMM d, yyyy'),
           visit.house,
           visit.time,
-          `${getHouseContact(visit.house)}`
+          getHouseContact(visit.house)
         ]);
         
         if (visitData.length > 0) {
@@ -11527,34 +11522,49 @@ function generateContractedVendorPdfs() {
         
         // Format sheet
         tempSheet.autoResizeColumns(1, 4);
-        tempSheet.getRange(3, 1, visitData.length, 4).setBorder(true, true, true, true, true, true);
+        tempSheet.getRange(2, 1, visitData.length + 1, 4).setBorder(true, true, true, true, true, true);
+        
+        // Add footer with total visits
+        const footerRow = 3 + visitData.length + 1;
+        tempSheet.getRange(footerRow, 1).setValue(`Total Visits: ${visitData.length}`);
+        tempSheet.getRange(footerRow, 1, 1, 4).merge();
+        tempSheet.getRange(footerRow, 1).setFontWeight('bold').setHorizontalAlignment('center');
         
         // Generate PDF
-        const pdfBlob = generatePdfFromSheet(tempSheet, `${actualVendorName}_Schedule`);
+        const pdfBlob = generatePdfFromSheet(tempSheet, `${vendorName}_Schedule`);
         const file = DriveApp.getFolderById(folderId).createFile(pdfBlob);
         pdfLinks.push({
-          vendor: actualVendorName,
-          url: file.getUrl()
+          vendor: vendorName,
+          url: file.getUrl(),
+          visits: visitData.length
         });
         
         // Clean up temp sheet
         ss.deleteSheet(tempSheet);
       }
-    }
-    
-    // Show results
-    let message = `✅ Generated ${vendorsWithSchedules} vendor PDFs:\n\n`;
-    pdfLinks.forEach(link => {
-      message += `• ${link.vendor}\n`;
     });
     
-    if (CONTRACTED_VENDORS.length > vendorsWithSchedules) {
-      message += `\n⚠️ Note: Some contracted vendors had no scheduled visits.`;
+    // Show results
+    if (vendorsWithSchedules === 0) {
+      ui.alert(
+        'No Contracted Vendor Visits Found',
+        'None of the contracted vendors have scheduled visits.\n\n' +
+        'Make sure you have generated a schedule first using:\n' +
+        'FFAS Scheduler > Generate Schedule',
+        ui.ButtonSet.OK
+      );
+      return;
     }
     
-    message += `\n\nPDFs saved in your Google Drive PDF folder.`;
+    let message = `✅ Generated ${vendorsWithSchedules} vendor PDFs:\n\n`;
+    pdfLinks.forEach(link => {
+      message += `• ${link.vendor} (${link.visits} visits)\n`;
+    });
     
-    ui.alert('Vendor PDFs Generated', message, ui.ButtonSet.OK);
+    message += `\n\nPDFs saved in your Google Drive PDF folder.`;
+    message += `\n\nUse "FFAS Scheduler > Reports & Analytics > Where Are My PDFs?" to find them.`;
+    
+    ui.alert('Contracted Vendor PDFs Generated', message, ui.ButtonSet.OK);
     
   } catch (error) {
     console.error('Error generating vendor PDFs:', error);
@@ -11576,6 +11586,39 @@ function getHouseContact(houseName) {
   };
   
   return contacts[houseName] || 'Contact program coordinator';
+}
+
+/**
+ * Generate PDF from a sheet
+ */
+function generatePdfFromSheet(sheet, fileName) {
+  const ss = sheet.getParent();
+  const originalActiveSheet = ss.getActiveSheet();
+  
+  // Hide all other sheets
+  const allSheets = ss.getSheets();
+  allSheets.forEach(s => {
+    if (s.getName() !== sheet.getName()) {
+      s.hideSheet();
+    }
+  });
+  
+  // Set the target sheet as active
+  ss.setActiveSheet(sheet);
+  
+  // Generate PDF
+  const blob = ss.getAs('application/pdf');
+  blob.setName(fileName + '.pdf');
+  
+  // Restore original state
+  allSheets.forEach(s => {
+    if (s.getName() !== sheet.getName()) {
+      s.showSheet();
+    }
+  });
+  ss.setActiveSheet(originalActiveSheet);
+  
+  return blob;
 }
 
 /**
